@@ -376,11 +376,29 @@ final class UsagePollingEngine {
                 NSLog("[CodexSync] SWITCHING active account to %@", matchedAccount.name)
                 try? accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
 
-                // Fully wipe the old account's state so the UI shows
-                // "Inactive saved account" instead of stale snapshot data.
+                // Keep the old account's snapshot (as stale) so the UI can
+                // still show last-known data. Only clear the live connection
+                // status so the LIVE badge and error go away.
                 if let previousActiveID {
                     var updatedStates = accountStates
-                    updatedStates.removeValue(forKey: previousActiveID)
+                    var oldState = updatedStates[previousActiveID] ?? {
+                        // Seed from the on-disk snapshot cache if available.
+                        if let cached = (try? snapshotCache.load())?[previousActiveID] {
+                            return AccountRefreshState(
+                                snapshot: cached.markingStale(true),
+                                errorMessage: nil,
+                                lastAttemptAt: nil,
+                                lastSuccessAt: cached.timestamp
+                            )
+                        }
+                        return AccountRefreshState()
+                    }()
+                    if let snap = oldState.snapshot {
+                        oldState.snapshot = snap.markingStale(true)
+                    }
+                    oldState.connectionStatus = nil
+                    oldState.errorMessage = nil
+                    updatedStates[previousActiveID] = oldState
                     accountStates = updatedStates
                 }
             } else {
