@@ -9,18 +9,22 @@ public class ThemeManager {
         }
     }
     
-    public var currentTheme: Theme = .vantage
+    public var currentTheme: Theme = .monolith
     
     @MainActor public static let shared = ThemeManager()
     
     private init() {
-        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.vantage.id
+        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.monolith.id
         updateTheme()
     }
     
     private func updateTheme() {
         if let theme = Theme.all.first(where: { $0.id == selectedThemeId }) {
             self.currentTheme = theme
+        } else {
+            // Fallback gracefully if an old invalid theme ID is in UserDefaults
+            self.currentTheme = .monolith
+            self.selectedThemeId = Theme.monolith.id
         }
     }
     

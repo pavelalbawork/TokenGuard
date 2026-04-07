@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 
 struct ClaudeOAuthCredential: Equatable, Sendable {
     let accessToken: String
@@ -28,6 +29,7 @@ struct AnthropicProvider: ServiceProvider {
     private let session: NetworkSession
     private let baseURL: URL
     private let snapshotReader: (any ConsumerUsageSnapshotReading)?
+    private let authStatusReader: ClaudeAuthStatusReading
     private let credentialLoader: @Sendable () throws -> ClaudeOAuthCredential
     private let credentialPersister: @Sendable (ClaudeOAuthCredential) throws -> Void
     private let now: @Sendable () -> Date
@@ -35,11 +37,8 @@ struct AnthropicProvider: ServiceProvider {
     init(
         session: NetworkSession = URLSession.shared,
         baseURL: URL = URL(string: "https://api.anthropic.com")!,
-        snapshotReader: (any ConsumerUsageSnapshotReading)? = CompositeConsumerUsageSnapshotReader(
-            readers: [
-                CodexBarWidgetSnapshotReader()
-            ]
-        ),
+        snapshotReader: (any ConsumerUsageSnapshotReading)? = nil,
+        authStatusReader: ClaudeAuthStatusReading = ClaudeCLIAuthStatusReader(),
         credentialLoader: @escaping @Sendable () throws -> ClaudeOAuthCredential = Self.loadClaudeOAuthCredential,
         credentialPersister: @escaping @Sendable (ClaudeOAuthCredential) throws -> Void = Self.persistClaudeOAuthCredential,
         now: @escaping @Sendable () -> Date = Date.init
@@ -47,6 +46,7 @@ struct AnthropicProvider: ServiceProvider {
         self.session = session
         self.baseURL = baseURL
         self.snapshotReader = snapshotReader
+        self.authStatusReader = authStatusReader
         self.credentialLoader = credentialLoader
         self.credentialPersister = credentialPersister
         self.now = now
@@ -171,14 +171,23 @@ struct AnthropicProvider: ServiceProvider {
         if let snapshotReader {
             let snapshotWindows = try? snapshotReader.windows(for: serviceType)
             if let windows = snapshotWindows ?? nil, !windows.isEmpty {
-                return (windows, "Consumer")
+                let tier = (try? authStatusReader.readStatus())?.subscriptionType?.capitalized ?? "Consumer"
+                return (windows, tier)
             }
         }
 
         _ = account
         _ = timestamp
+        let authStatus = try? authStatusReader.readStatus()
+        if let authStatus, authStatus.loggedIn {
+            let identity = authStatus.email ?? "your Claude account"
+            throw ServiceProviderError.unavailable(
+                "Claude is signed in as \(identity), but the local usage credential is stale. Run `claude auth login` to refresh Claude Code's local credentials."
+            )
+        }
+
         throw ServiceProviderError.unavailable(
-            "No live Claude limit data found. Reauthenticate Claude Code or use a provider that exposes live remaining usage."
+            "No live Claude limit data found. Sign into Claude Code on this Mac and then refresh."
         )
     }
 
@@ -217,7 +226,13 @@ struct AnthropicProvider: ServiceProvider {
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        return try await ProviderSupport.performJSONRequest(session: session, request: request)
+        do {
+            return try await ProviderSupport.performJSONRequest(session: session, request: request)
+        } catch let ServiceProviderError.unexpectedStatus(code, _) where code == 429 {
+            throw ServiceProviderError.unavailable(
+                "Claude live usage is temporarily rate-limited. Keeping the last known usage until Anthropic allows another refresh."
+            )
+        }
     }
 
     private func refreshClaudeOAuthCredential(current: ClaudeOAuthCredential) async throws -> ClaudeOAuthCredential {
@@ -287,7 +302,12 @@ struct AnthropicProvider: ServiceProvider {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: claudeOAuthService,
             kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecUseAuthenticationContext as String: {
+                let context = LAContext()
+                context.interactionNotAllowed = true
+                return context
+            }()
         ]
 
         var result: CFTypeRef?
@@ -373,5 +393,50 @@ struct AnthropicProvider: ServiceProvider {
         guard updateStatus == errSecSuccess else {
             throw ServiceProviderError.unavailable("Could not save refreshed Claude Code credentials to Keychain.")
         }
+    }
+}
+
+struct ClaudeCLIAuthStatus: Equatable, Sendable {
+    let loggedIn: Bool
+    let email: String?
+    let subscriptionType: String?
+}
+
+protocol ClaudeAuthStatusReading: Sendable {
+    func readStatus() throws -> ClaudeCLIAuthStatus
+}
+
+struct ClaudeCLIAuthStatusReader: ClaudeAuthStatusReading {
+    func readStatus() throws -> ClaudeCLIAuthStatus {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["claude", "auth", "status", "--json"]
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+            let errorText = String(data: errorData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw ServiceProviderError.unavailable(
+                errorText?.isEmpty == false ? errorText! : "Could not read Claude auth status from the local CLI."
+            )
+        }
+
+        let data = stdout.fileHandleForReading.readDataToEndOfFile()
+        let payload = try JSONSerialization.jsonObject(with: data)
+        let root = try ProviderSupport.dictionary(payload, context: "Claude auth status")
+
+        return ClaudeCLIAuthStatus(
+            loggedIn: (root["loggedIn"] as? Bool) ?? false,
+            email: ProviderSupport.string(root["email"]),
+            subscriptionType: ProviderSupport.string(root["subscriptionType"])
+        )
     }
 }

@@ -17,6 +17,7 @@ final class UsagePollingEngine {
 
     private let accountStore: AccountStore
     private let keychainManager: KeychainManager
+    private let snapshotCache: UsageSnapshotCache
     private let providers: [ServiceType: ServiceProvider]
     private let sleep: @Sendable (TimeInterval) async -> Void
 
@@ -30,6 +31,7 @@ final class UsagePollingEngine {
     init(
         accountStore: AccountStore,
         keychainManager: KeychainManager,
+        snapshotCache: UsageSnapshotCache = UsageSnapshotCache(),
         providers: [ServiceType: ServiceProvider] = [
             .claude: AnthropicProvider(),
             .codex: OpenAIProvider(),
@@ -38,7 +40,7 @@ final class UsagePollingEngine {
         ],
         serviceRefreshIntervals: [ServiceType: TimeInterval] = [
             .claude: 300,
-            .codex: 300,
+            .codex: 5,
             .gemini: 300,
             .antigravity: 30
         ],
@@ -49,10 +51,14 @@ final class UsagePollingEngine {
     ) {
         self.accountStore = accountStore
         self.keychainManager = keychainManager
+        self.snapshotCache = snapshotCache
         self.providers = providers
         self.serviceRefreshIntervals = serviceRefreshIntervals
         self.sleep = sleep
-        self.accountStates = [:]
+        self.accountStates = UsagePollingEngine.initialAccountStates(
+            accounts: accountStore.accounts,
+            snapshotCache: snapshotCache
+        )
         self.isRefreshing = false
     }
 
@@ -82,6 +88,7 @@ final class UsagePollingEngine {
     }
 
     func refreshAll(force: Bool = true) async {
+        guard !isRefreshing else { return }
         await synchronizeActiveConsumerAccounts()
 
         isRefreshing = true
@@ -101,7 +108,10 @@ final class UsagePollingEngine {
                     }
 
                     do {
-                        let credential = try keychainManager.readSecret(reference: account.credentialRef) ?? ""
+                        let credential = try Self.pollingCredential(
+                            for: account,
+                            keychainManager: keychainManager
+                        )
                         let snapshot = try await provider.fetchUsage(account: account, credential: credential)
                         return (account.id, .success(snapshot))
                     } catch {
@@ -128,10 +138,15 @@ final class UsagePollingEngine {
             return
         }
 
-        accountStates[accountID, default: AccountRefreshState()].lastAttemptAt = Date()
+        updateAccountState(for: accountID) { state in
+            state.lastAttemptAt = Date()
+        }
 
         do {
-            let credential = try keychainManager.readSecret(reference: account.credentialRef) ?? ""
+            let credential = try Self.pollingCredential(
+                for: account,
+                keychainManager: keychainManager
+            )
             let snapshot = try await provider.fetchUsage(account: account, credential: credential)
             apply(result: .success(snapshot), to: accountID)
         } catch {
@@ -140,7 +155,8 @@ final class UsagePollingEngine {
     }
 
     private func apply(result: Result<UsageSnapshot, Error>, to accountID: UUID) {
-        var state = accountStates[accountID] ?? AccountRefreshState()
+        var updatedStates = accountStates
+        var state = updatedStates[accountID] ?? AccountRefreshState()
         state.lastAttemptAt = Date()
 
         switch result {
@@ -148,6 +164,7 @@ final class UsagePollingEngine {
             state.snapshot = snapshot.markingStale(false)
             state.errorMessage = nil
             state.lastSuccessAt = snapshot.timestamp
+            try? snapshotCache.save(snapshot: snapshot)
         case let .failure(error):
             if let snapshot = state.snapshot {
                 state.snapshot = snapshot.markingStale(true)
@@ -155,7 +172,8 @@ final class UsagePollingEngine {
             state.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
 
-        accountStates[accountID] = state
+        updatedStates[accountID] = state
+        accountStates = updatedStates
     }
 
     private var pollCadence: TimeInterval {
@@ -170,7 +188,7 @@ final class UsagePollingEngine {
         }
 
         let activeIntervals = activeServiceTypes.compactMap { serviceRefreshIntervals[$0] }
-        return max(activeIntervals.min() ?? 300, 5)
+        return max(activeIntervals.min() ?? 300, 1)
     }
 
     private func synchronizeActiveConsumerAccounts() async {
@@ -232,5 +250,47 @@ final class UsagePollingEngine {
             return true
         }
         return Date().timeIntervalSince(lastAttempt) >= interval
+    }
+
+    private static func initialAccountStates(
+        accounts: [Account],
+        snapshotCache: UsageSnapshotCache
+    ) -> [UUID: AccountRefreshState] {
+        guard let cachedSnapshots = try? snapshotCache.load() else {
+            return [:]
+        }
+
+        var states: [UUID: AccountRefreshState] = [:]
+        for account in accounts {
+            if let snapshot = cachedSnapshots[account.id] {
+                states[account.id] = AccountRefreshState(
+                    snapshot: snapshot,
+                    errorMessage: nil,
+                    lastAttemptAt: nil,
+                    lastSuccessAt: snapshot.timestamp
+                )
+            }
+        }
+        return states
+    }
+
+    private func updateAccountState(
+        for accountID: UUID,
+        _ mutate: (inout AccountRefreshState) -> Void
+    ) {
+        var updatedStates = accountStates
+        var state = updatedStates[accountID] ?? AccountRefreshState()
+        mutate(&state)
+        updatedStates[accountID] = state
+        accountStates = updatedStates
+    }
+
+    private nonisolated static func pollingCredential(
+        for account: Account,
+        keychainManager: KeychainManager
+    ) throws -> String {
+        _ = account
+        _ = keychainManager
+        return ""
     }
 }

@@ -154,16 +154,10 @@ struct ServiceSectionView: View {
 
     @ViewBuilder
     private func deleteButton(for account: Account, theme: Theme) -> some View {
-        Button {
+        HoverableDeleteButton(theme: theme) {
             deleteErrorMessage = nil
             accountToDelete = account
-        } label: {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 14))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(theme.backgroundMain, theme.textSecondary.opacity(0.4))
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -185,6 +179,7 @@ struct ServiceSectionView: View {
                 .buttonStyle(.bordered)
 
                 Button("Delete", role: .destructive) {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                     do {
                         try accountStore.remove(accountID: account.id)
                         accountToDelete = nil
@@ -200,5 +195,27 @@ struct ServiceSectionView: View {
         .background(theme.surfaceContainerHigh.opacity(0.45))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+struct HoverableDeleteButton: View {
+    let theme: Theme
+    let action: () -> Void
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 14))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(theme.backgroundMain, isHovered ? theme.error : theme.textSecondary.opacity(0.4))
+                .scaleEffect(isHovered ? 1.15 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }

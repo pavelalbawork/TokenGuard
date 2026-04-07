@@ -36,10 +36,10 @@ struct UsageToolApp: App {
                 .environment(accountStore)
                 .environment(pollingEngine)
                 .environment(themeManager)
-                .frame(width: 360, height: 740) // Full size Stitch page bounds
+                .frame(width: 360, height: 560)
                 .onAppear {
                     pollingEngine.start()
-                    Task { await pollingEngine.refreshAll(force: false) }
+                    Task { await pollingEngine.refreshAll(force: true) }
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(

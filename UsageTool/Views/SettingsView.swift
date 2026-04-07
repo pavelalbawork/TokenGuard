@@ -111,6 +111,7 @@ struct SettingsView: View {
     
     private func moveUp(_ service: ServiceType) {
         guard let index = orderedServices.firstIndex(of: service), index > 0 else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
         withAnimation_Settings {
             orderedServices.swapAt(index, index - 1)
             providerOrderStr = orderedServices.map { $0.rawValue }.joined(separator: ",")
@@ -119,6 +120,7 @@ struct SettingsView: View {
     
     private func moveDown(_ service: ServiceType) {
         guard let index = orderedServices.firstIndex(of: service), index < orderedServices.count - 1 else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
         withAnimation_Settings {
             orderedServices.swapAt(index, index + 1)
             providerOrderStr = orderedServices.map { $0.rawValue }.joined(separator: ",")

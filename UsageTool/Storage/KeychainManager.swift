@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 
 protocol KeychainBackingStore: Sendable {
     func add(query: [String: Any]) -> OSStatus
@@ -76,10 +77,15 @@ struct KeychainManager: Sendable {
         }
     }
 
-    func readSecret(reference: String) throws -> String? {
+    func readSecret(reference: String, allowUserInteraction: Bool = true) throws -> String? {
         var query = baseQuery(reference: reference)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        if !allowUserInteraction {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            query[kSecUseAuthenticationContext as String] = context
+        }
 
         var result: CFTypeRef?
         let status = backingStore.copyMatching(query: query, result: &result)

@@ -43,7 +43,7 @@ public struct Theme: Identifiable, Equatable, Sendable {
 extension Theme {
     public static let vantage = Theme(
         id: "vantage",
-        name: "Vantage Tracker",
+        name: "Classic: Vantage",
         backgroundMain: Color(hex: "#0d0a16"),
         surface: Color(hex: "#0d0a16"),
         surfaceContainer: Color(hex: "#15111e"),
@@ -59,7 +59,7 @@ extension Theme {
     
     public static let cyberpunk = Theme(
         id: "cyberpunk",
-        name: "Cyberpunk",
+        name: "Classic: Cyberpunk",
         backgroundMain: Color(hex: "#0e0e0e"),
         surface: Color(hex: "#0e0e0e"),
         surfaceContainer: Color(hex: "#131313"),
@@ -75,7 +75,7 @@ extension Theme {
     
     public static let luminous = Theme(
         id: "luminous",
-        name: "Luminous",
+        name: "Classic: Luminous",
         backgroundMain: Color(hex: "#0f172a"),
         surface: Color(hex: "#0f172a"),
         surfaceContainer: Color(hex: "#1e293b"),
@@ -91,7 +91,7 @@ extension Theme {
     
     public static let nordicFrost = Theme(
         id: "nordicFrost",
-        name: "Nordic Frost",
+        name: "Classic: Nordic Frost",
         backgroundMain: Color(hex: "#080e1a"),
         surface: Color(hex: "#080e1a"),
         surfaceContainer: Color(hex: "#0f172a"),
@@ -104,8 +104,72 @@ extension Theme {
         border: Color(white: 1.0, opacity: 0.05),
         error: Color(hex: "#ff5252")
     )
+
+    public static let monolith = Theme(
+        id: "monolith",
+        name: "New: Monolith (Obsidian)",
+        backgroundMain: Color(hex: "#09090b"), // Zinc 950
+        surface: Color(hex: "#09090b"),
+        surfaceContainer: Color(hex: "#18181b"), // Zinc 900
+        surfaceContainerHigh: Color(hex: "#27272a"), // Zinc 800
+        textPrimary: Color(hex: "#fafafa"), // Zinc 50
+        textSecondary: Color(hex: "#a1a1aa"), // Zinc 400
+        primaryAccent: Color(hex: "#ffffff"), // Pure sharp white
+        secondaryAccent: Color(hex: "#d4d4d8"), // Zinc 300
+        tertiaryAccent: Color(hex: "#60a5fa"), // Piercing blue
+        border: Color(white: 1.0, opacity: 0.08),
+        error: Color(hex: "#ef4444")
+    )
     
-    public static let all: [Theme] = [.vantage, .cyberpunk, .luminous, .nordicFrost]
+    public static let synthwave = Theme(
+        id: "synthwave",
+        name: "New: Synthwave (Neon)",
+        backgroundMain: Color(hex: "#0b0410"), // Deep dark purple
+        surface: Color(hex: "#0b0410"),
+        surfaceContainer: Color(hex: "#160b24"), // Raised purple
+        surfaceContainerHigh: Color(hex: "#25133d"), // Card purple
+        textPrimary: Color(hex: "#fdf8ff"),
+        textSecondary: Color(hex: "#b89fcf"),
+        primaryAccent: Color(hex: "#ff2a9d"), // Neon pink
+        secondaryAccent: Color(hex: "#00e5ff"), // Cyan
+        tertiaryAccent: Color(hex: "#ffea00"), // Electric yellow
+        border: Color(hex: "#ff2a9d").opacity(0.15),
+        error: Color(hex: "#ff3366")
+    )
+    
+    public static let solar = Theme(
+        id: "solar",
+        name: "New: Solar Flare (Navy)",
+        backgroundMain: Color(hex: "#030c14"), // Abyssal navy
+        surface: Color(hex: "#030c14"),
+        surfaceContainer: Color(hex: "#0a192f"), // Rich navy
+        surfaceContainerHigh: Color(hex: "#112240"), // Slate navy
+        textPrimary: Color(hex: "#e6f1ff"),
+        textSecondary: Color(hex: "#8892b0"),
+        primaryAccent: Color(hex: "#f59e0b"), // Amber
+        secondaryAccent: Color(hex: "#64ffda"), // Teal tint
+        tertiaryAccent: Color(hex: "#fbbf24"), // Gold
+        border: Color(white: 1.0, opacity: 0.05),
+        error: Color(hex: "#f43f5e") // Rose
+    )
+    
+    public static let aurora = Theme(
+        id: "aurora",
+        name: "New: Aurora (Midnight)",
+        backgroundMain: Color(hex: "#001418"), // Midnight dark teal
+        surface: Color(hex: "#001418"),
+        surfaceContainer: Color(hex: "#002329"),
+        surfaceContainerHigh: Color(hex: "#00343d"),
+        textPrimary: Color(hex: "#e0f2f1"),
+        textSecondary: Color(hex: "#80cbc4"),
+        primaryAccent: Color(hex: "#1de9b6"), // Mint/Teal
+        secondaryAccent: Color(hex: "#64ffda"), // Cyan splash
+        tertiaryAccent: Color(hex: "#18ffff"), // Bright cyan
+        border: Color(hex: "#1de9b6").opacity(0.08),
+        error: Color(hex: "#ff5252")
+    )
+    
+    public static let all: [Theme] = [.vantage, .cyberpunk, .luminous, .nordicFrost, .monolith, .synthwave, .solar, .aurora]
 }
 
 extension Color {

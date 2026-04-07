@@ -15,6 +15,7 @@ struct MainPopoverView: View {
     @State private var selectedTab: NavigationTab = .usage
     @State private var showSettings = false // Drives inline settings display if clicked from header
     @State private var isAddingAccount = false
+    @Namespace private var animationNameSpace
 
     @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
 
@@ -94,6 +95,7 @@ struct MainPopoverView: View {
                         .environment(themeManager)
                         .padding(16)
                 }
+                .scrollIndicators(.hidden)
             } else {
                 ScrollView {
                     VStack(spacing: 24) {
@@ -115,56 +117,71 @@ struct MainPopoverView: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
                         
                         // Router Content
-                        if isAddingAccount {
-                            InlineAddAccountView(
-                                onCancel: { isAddingAccount = false },
-                                onComplete: { 
-                                    isAddingAccount = false
-                                    selectedTab = .usage
+                        Group {
+                            if isAddingAccount {
+                                InlineAddAccountView(
+                                    onCancel: {
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            isAddingAccount = false
+                                        }
+                                    },
+                                    onComplete: { 
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            isAddingAccount = false
+                                            selectedTab = .usage
+                                        }
+                                    }
+                                )
+                            } else if selectedTab == .usage {
+                                if accountStore.accounts.isEmpty {
+                                    Button(action: {
+                                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                            isAddingAccount = true
+                                        }
+                                    }) {
+                                        VStack(spacing: 16) {
+                                            Image(systemName: "plus.circle")
+                                                .font(.system(size: 32, weight: .ultraLight))
+                                                .symbolRenderingMode(.hierarchical)
+                                            Text("No accounts configured yet. Click to add.")
+                                        }
+                                        .foregroundStyle(theme.textSecondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.top, 40)
+                                } else {
+                                    VStack(alignment: .leading, spacing: 24) {
+                                        let orderKeys = providerOrderStr.components(separatedBy: ",")
+                                        let sortedTypes = ServiceType.allCases.sorted { a, b in
+                                            let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
+                                            let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
+                                            return idxA < idxB
+                                        }
+                                        let serviceTypes = sortedTypes.filter { serviceType in
+                                            accountStore.accounts.contains { $0.serviceType == serviceType }
+                                        }
+                                        ForEach(serviceTypes, id: \.self) { serviceType in
+                                            ServiceSectionView(
+                                                serviceType: serviceType,
+                                                accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
+                                            )
+                                        }
+                                    }
                                 }
-                            )
-                        } else if selectedTab == .usage {
-                            if accountStore.accounts.isEmpty {
-                                Button(action: {
-                                    isAddingAccount = true
-                                }) {
-                                    VStack(spacing: 16) {
-                                        Image(systemName: "plus.circle")
-                                            .font(.system(size: 32, weight: .ultraLight))
-                                            .symbolRenderingMode(.hierarchical)
-                                        Text("No accounts configured yet. Click to add.")
-                                    }
-                                    .foregroundStyle(theme.textSecondary)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.top, 40)
-                            } else {
-                                VStack(alignment: .leading, spacing: 24) {
-                                    let orderKeys = providerOrderStr.components(separatedBy: ",")
-                                    let sortedTypes = ServiceType.allCases.sorted { a, b in
-                                        let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
-                                        let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
-                                        return idxA < idxB
-                                    }
-                                    let serviceTypes = sortedTypes.filter { serviceType in
-                                        accountStore.accounts.contains { $0.serviceType == serviceType }
-                                    }
-                                    ForEach(serviceTypes, id: \.self) { serviceType in
-                                        ServiceSectionView(
-                                            serviceType: serviceType,
-                                            accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
-                                        )
-                                    }
-                                }
+                            } else if selectedTab == .limits {
+                                LimitsView()
+                            } else if selectedTab == .history {
+                                HistoryView()
                             }
-                        } else if selectedTab == .limits {
-                            LimitsView()
-                        } else if selectedTab == .history {
-                            HistoryView()
                         }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAddingAccount)
                     }
                     .padding(16)
                 }
+                .scrollIndicators(.hidden)
             }
             
             // Footer — Item 2: remove dead links, Item 7: version from Bundle
@@ -177,7 +194,12 @@ struct MainPopoverView: View {
 
                 Spacer()
 
-                Button(action: { isAddingAccount = true }) {
+                Button(action: { 
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isAddingAccount = true
+                    }
+                }) {
                     Text("ADD ACCOUNT")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(2.0)
@@ -203,16 +225,27 @@ struct MainPopoverView: View {
 
     @ViewBuilder
     private func expandedNavButton(title: String, isSelected: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button(action: {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+            action()
+        }) {
             Text(title)
                 .font(.system(size: 9, weight: .bold))
                 .tracking(2.0)
                 .textCase(.uppercase)
-                .foregroundStyle(isSelected ? theme.tertiaryAccent : theme.textSecondary)
+                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.8))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(isSelected ? theme.surfaceContainerHigh : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    ZStack {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(theme.surfaceContainerHigh)
+                                .matchedGeometryEffect(id: "TabHighlight", in: animationNameSpace)
+                        }
+                    }
+                )
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
     }
@@ -294,12 +327,11 @@ struct GlobalUsageHeroView: View {
             Spacer()
             
             ZStack {
-                RadialProgressRing(
+                CyberDialGraphic(
                     progress: totalProgress,
-                    color: theme.secondaryAccent,
-                    trackColor: theme.surfaceContainerHigh
+                    theme: theme
                 )
-                .frame(width: 64, height: 64)
+                .frame(width: 80, height: 80)
                 
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 24, weight: .light))
@@ -338,22 +370,48 @@ struct GlobalUsageHeroView: View {
     }
 }
 
-struct RadialProgressRing: View {
+struct CyberDialGraphic: View {
     var progress: Double // 0 to 1
-    var color: Color
-    var trackColor: Color
+    var theme: Theme
     
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(trackColor, lineWidth: 8)
+            // Outer dashed container
+            Circle()
+                .stroke(theme.surfaceContainerHigh, style: StrokeStyle(lineWidth: 2, dash: [4, 4]))
+                .frame(width: 80, height: 80)
+                
+            // Inner thick background track
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 8)
+                .frame(width: 64, height: 64)
             
-            // Item 3: invert ring to show remaining (starts full, drains as usage grows)
-            RoundedRectangle(cornerRadius: 16)
-                .trim(from: 0, to: CGFloat(max(0, 1.0 - min(progress, 1.0))))
-                .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+            // The live draining capacity ring
+            let remaining = CGFloat(max(0, 1.0 - min(progress, 1.0)))
+            Circle()
+                .trim(from: 0, to: remaining)
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [theme.tertiaryAccent, theme.primaryAccent]),
+                        center: .center,
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(270)
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
                 .rotationEffect(.degrees(-90))
-                .shadow(color: color.opacity(0.8), radius: 6, x: 0, y: 0)
+                .animation(.spring(response: 0.8, dampingFraction: 0.6), value: remaining)
+                .frame(width: 64, height: 64)
+                .shadow(color: theme.primaryAccent.opacity(0.8), radius: 6, x: 0, y: 0)
+                
+            // Center crosshairs
+            Path { path in
+                path.move(to: CGPoint(x: 40, y: 35))
+                path.addLine(to: CGPoint(x: 40, y: 45))
+                path.move(to: CGPoint(x: 35, y: 40))
+                path.addLine(to: CGPoint(x: 45, y: 40))
+            }
+            .stroke(theme.secondaryAccent.opacity(0.5), lineWidth: 1)
         }
     }
 }

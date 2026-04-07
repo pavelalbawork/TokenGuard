@@ -125,6 +125,57 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertNil(engine.accountStates[secondAccount.id]?.lastAttemptAt)
         XCTAssertEqual(engine.accountStates[firstAccount.id]?.snapshot?.windows.first?.used, nil)
     }
+
+    func testLoadsCachedSnapshotAndMarksItStaleOnRefreshFailure() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let cacheURL = tempDirectory.appendingPathComponent("usage-snapshots.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+        let snapshotCache = UsageSnapshotCache(storageURL: cacheURL)
+
+        let account = Account(
+            name: "pavelalbawork@gmail.com",
+            serviceType: .claude,
+            credentialRef: "claude-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer"
+            ]
+        )
+        try accountStore.add(account)
+
+        let cachedSnapshot = UsageSnapshot(
+            accountId: account.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .rolling5h, used: 40, limit: 100, unit: .percent, resetDate: nil)
+            ],
+            tier: "Pro"
+        )
+        try snapshotCache.save(snapshot: cachedSnapshot)
+
+        let provider = MockFailingProvider(serviceType: .claude, message: "Claude live usage is temporarily rate-limited.")
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            snapshotCache: snapshotCache,
+            providers: [.claude: provider],
+            serviceRefreshIntervals: [.claude: 300],
+            sleep: { _ in }
+        )
+
+        XCTAssertEqual(engine.accountStates[account.id]?.snapshot?.windows.first?.used ?? -1, 40, accuracy: 0.1)
+
+        await engine.refresh(accountID: account.id)
+
+        XCTAssertEqual(engine.accountStates[account.id]?.snapshot?.isStale, true)
+        XCTAssertEqual(engine.accountStates[account.id]?.errorMessage, "Claude live usage is temporarily rate-limited.")
+    }
 }
 
 private struct MockConsumerIdentityProvider: ServiceProvider, ConsumerAccountDetecting {
@@ -152,5 +203,22 @@ private struct MockConsumerIdentityProvider: ServiceProvider, ConsumerAccountDet
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
         identity
+    }
+}
+
+private struct MockFailingProvider: ServiceProvider {
+    let serviceType: ServiceType
+    let message: String
+
+    func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {
+        _ = account
+        _ = credential
+        throw ServiceProviderError.unavailable(message)
+    }
+
+    func validateCredentials(account: Account, credential: String) async throws -> Bool {
+        _ = account
+        _ = credential
+        return false
     }
 }

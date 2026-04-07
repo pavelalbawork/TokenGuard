@@ -21,6 +21,12 @@ struct GeminiProvider: ServiceProvider {
     }
 
     func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {
+        guard !credential.isEmpty else {
+            throw ServiceProviderError.unavailable(
+                "Gemini background refresh is disabled until local credentials are reworked to avoid Keychain prompts."
+            )
+        }
+
         guard let projectID = account.configurationValue(for: Account.ConfigurationKey.googleProjectID) else {
             throw ServiceProviderError.missingConfiguration("Gemini accounts require a Google Cloud project ID.")
         }
@@ -92,6 +98,9 @@ struct GeminiProvider: ServiceProvider {
     }
 
     func validateCredentials(account: Account, credential: String) async throws -> Bool {
+        guard !credential.isEmpty else {
+            return false
+        }
         _ = try await oauthManager.accessToken(using: credential, account: account)
         return true
     }

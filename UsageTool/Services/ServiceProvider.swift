@@ -16,6 +16,16 @@ protocol ConsumerUsageSnapshotReading: Sendable {
     func windows(for serviceType: ServiceType) throws -> [UsageWindow]?
 }
 
+struct CodexConsumerSnapshot: Sendable, Equatable {
+    let windows: [UsageWindow]
+    let identity: ConsumerAccountIdentity?
+    let tier: String?
+}
+
+protocol CodexLiveSnapshotReading: Sendable {
+    func readSnapshot() throws -> CodexConsumerSnapshot?
+}
+
 struct ConsumerAccountIdentity: Sendable, Equatable {
     let email: String?
     let externalID: String?
@@ -53,6 +63,304 @@ struct CodexAuthIdentityReader: Sendable {
         }
 
         return ConsumerAccountIdentity(email: email, externalID: externalID)
+    }
+}
+
+struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
+    typealias AppServerRunner = @Sendable (_ input: String, _ timeout: TimeInterval) throws -> (stdout: String, stderr: String, exitCode: Int32)
+
+    private let timeout: TimeInterval
+    private let runner: AppServerRunner
+
+    init(
+        timeout: TimeInterval = 5,
+        runner: @escaping AppServerRunner = Self.runAppServer
+    ) {
+        self.timeout = timeout
+        self.runner = runner
+    }
+
+    func readSnapshot() throws -> CodexConsumerSnapshot? {
+        let requests = [
+            makeRequest(
+                id: 1,
+                method: "initialize",
+                params: [
+                    "clientInfo": [
+                        "name": "UsageTool",
+                        "version": "1.0"
+                    ],
+                    "capabilities": NSNull()
+                ]
+            ),
+            makeRequest(
+                id: 2,
+                method: "account/read",
+                params: [
+                    "refreshToken": false
+                ]
+            ),
+            makeRequest(
+                id: 3,
+                method: "account/rateLimits/read",
+                params: NSNull()
+            )
+        ]
+
+        let input = requests.map { request in
+            let data = try! JSONSerialization.data(withJSONObject: request)
+            return String(decoding: data, as: UTF8.self)
+        }.joined(separator: "\n") + "\n"
+
+        let output = try runner(input, timeout)
+        guard output.exitCode == 0 else {
+            throw ServiceProviderError.unavailable(output.stderr.isEmpty ? "Codex app-server exited with status \(output.exitCode)." : output.stderr)
+        }
+
+        let responses = try parseResponses(from: output.stdout)
+        guard let rateLimitsResponse = responses[3],
+              let result = rateLimitsResponse["result"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        let accountResult = (responses[2]?["result"] as? [String: Any]) ?? [:]
+        let identity = parseIdentity(from: accountResult)
+        let tier = parseTier(from: result, accountResult: accountResult)
+        let windows = parseWindows(from: result)
+
+        guard !windows.isEmpty else {
+            return nil
+        }
+
+        return CodexConsumerSnapshot(windows: windows, identity: identity, tier: tier)
+    }
+
+    private func makeRequest(id: Int, method: String, params: Any) -> [String: Any] {
+        [
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params
+        ]
+    }
+
+    private func parseResponses(from stdout: String) throws -> [Int: [String: Any]] {
+        var responses: [Int: [String: Any]] = [:]
+
+        for line in stdout.split(whereSeparator: \.isNewline) {
+            guard let data = line.data(using: .utf8) else { continue }
+            let payload = try JSONSerialization.jsonObject(with: data)
+            guard let object = payload as? [String: Any],
+                  let id = ProviderSupport.int(object["id"]) else {
+                continue
+            }
+            responses[id] = object
+        }
+
+        return responses
+    }
+
+    private func parseIdentity(from accountResult: [String: Any]) -> ConsumerAccountIdentity? {
+        guard let account = accountResult["account"] as? [String: Any] else {
+            return nil
+        }
+
+        let email = ProviderSupport.string(account["email"])
+        guard email != nil else {
+            return nil
+        }
+
+        return ConsumerAccountIdentity(email: email, externalID: nil)
+    }
+
+    private func parseTier(from rateLimitResult: [String: Any], accountResult: [String: Any]) -> String? {
+        if let rateLimits = selectedRateLimitSnapshot(from: rateLimitResult),
+           let tier = ProviderSupport.string(rateLimits["planType"]) {
+            return tier.capitalized
+        }
+
+        if let account = accountResult["account"] as? [String: Any],
+           let tier = ProviderSupport.string(account["planType"]) {
+            return tier.capitalized
+        }
+
+        return nil
+    }
+
+    private func parseWindows(from rateLimitResult: [String: Any]) -> [UsageWindow] {
+        guard let snapshot = selectedRateLimitSnapshot(from: rateLimitResult) else {
+            return []
+        }
+
+        return [
+            makeWindow(from: snapshot["primary"] as? [String: Any]),
+            makeWindow(from: snapshot["secondary"] as? [String: Any])
+        ].compactMap { $0 }
+    }
+
+    private func selectedRateLimitSnapshot(from result: [String: Any]) -> [String: Any]? {
+        if let byLimitID = result["rateLimitsByLimitId"] as? [String: Any],
+           let codex = byLimitID["codex"] as? [String: Any] {
+            return codex
+        }
+
+        return result["rateLimits"] as? [String: Any]
+    }
+
+    private func makeWindow(from limit: [String: Any]?) -> UsageWindow? {
+        guard
+            let limit,
+            let usedPercent = ProviderSupport.double(limit["usedPercent"])
+        else {
+            return nil
+        }
+
+        let windowMinutes = ProviderSupport.int(limit["windowDurationMins"])
+        let resetDate = unixDate(limit["resetsAt"])
+
+        return UsageWindow(
+            windowType: windowType(for: windowMinutes),
+            used: min(max(usedPercent, 0), 100),
+            limit: 100,
+            unit: .percent,
+            resetDate: resetDate,
+            label: nil
+        )
+    }
+
+    private func windowType(for windowMinutes: Int?) -> WindowType {
+        switch windowMinutes {
+        case 300:
+            return .rolling5h
+        case 10_080:
+            return .weekly
+        case 1_440:
+            return .daily
+        default:
+            return .monthly
+        }
+    }
+
+    private func unixDate(_ value: Any?) -> Date? {
+        guard let timestamp = ProviderSupport.double(value) else {
+            return nil
+        }
+
+        return Date(timeIntervalSince1970: timestamp)
+    }
+
+    private static func runAppServer(input: String, timeout: TimeInterval) throws -> (stdout: String, stderr: String, exitCode: Int32) {
+        final class OutputCollector: @unchecked Sendable {
+            private let lock = NSLock()
+            private var stdout = ""
+            private var stderr = ""
+            private var stdoutBuffer = Data()
+            private var foundRateLimits = false
+
+            func append(_ data: Data, stdout isStdout: Bool) {
+                guard !data.isEmpty else { return }
+
+                lock.lock()
+                defer { lock.unlock() }
+
+                if isStdout {
+                    stdoutBuffer.append(data)
+                    while let newlineIndex = stdoutBuffer.firstIndex(of: 0x0A) {
+                        let lineData = stdoutBuffer.prefix(upTo: newlineIndex)
+                        stdoutBuffer.removeSubrange(...newlineIndex)
+                        guard !lineData.isEmpty else { continue }
+                        let line = String(decoding: lineData, as: UTF8.self)
+                        stdout += line + "\n"
+                        if line.contains("\"id\":3") || line.contains("\"method\":\"account/rateLimits/updated\"") {
+                            foundRateLimits = true
+                        }
+                    }
+                } else {
+                    stderr += String(decoding: data, as: UTF8.self)
+                }
+            }
+
+            func flushRemainder() -> (stdout: String, stderr: String, foundRateLimits: Bool) {
+                lock.lock()
+                defer { lock.unlock() }
+
+                if !stdoutBuffer.isEmpty {
+                    stdout += String(decoding: stdoutBuffer, as: UTF8.self)
+                    stdoutBuffer.removeAll()
+                }
+
+                return (stdout, stderr, foundRateLimits)
+            }
+
+            func hasFoundRateLimits() -> Bool {
+                lock.lock()
+                defer { lock.unlock() }
+                return foundRateLimits
+            }
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["codex", "app-server"]
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        let stdinPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        process.standardInput = stdinPipe
+
+        let collector = OutputCollector()
+        let completed = DispatchSemaphore(value: 0)
+        let rateLimitsReady = DispatchSemaphore(value: 0)
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+            collector.append(handle.availableData, stdout: true)
+            if collector.hasFoundRateLimits() {
+                rateLimitsReady.signal()
+            }
+        }
+
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            collector.append(handle.availableData, stdout: false)
+        }
+
+        process.terminationHandler = { _ in
+            completed.signal()
+        }
+
+        try process.run()
+        stdinPipe.fileHandleForWriting.write(Data(input.utf8))
+
+        if rateLimitsReady.wait(timeout: .now() + timeout) == .timedOut {
+            try? stdinPipe.fileHandleForWriting.close()
+            process.terminate()
+            _ = completed.wait(timeout: .now() + 1)
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            let stderrText = collector.flushRemainder().stderr
+            throw ServiceProviderError.unavailable(
+                stderrText.isEmpty
+                    ? "Codex app-server timed out while reading live rate limits."
+                    : stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+
+        try? stdinPipe.fileHandleForWriting.close()
+        process.terminate()
+        _ = completed.wait(timeout: .now() + 1)
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+        collector.append(stdoutPipe.fileHandleForReading.readDataToEndOfFile(), stdout: true)
+        collector.append(stderrPipe.fileHandleForReading.readDataToEndOfFile(), stdout: false)
+        let final = collector.flushRemainder()
+
+        guard final.foundRateLimits else {
+            throw ServiceProviderError.unavailable("Codex app-server did not return live rate limits.")
+        }
+
+        return (final.stdout, final.stderr, process.terminationStatus)
     }
 }
 
@@ -115,7 +423,7 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
 
         var latest: TimestampedWindows?
         for candidate in sessionFiles.sorted(by: { $0.modifiedAt > $1.modifiedAt }) {
-            if let parsed = try windows(from: candidate.url, fallbackTimestamp: candidate.modifiedAt) {
+            if let parsed = try? windows(from: candidate.url, fallbackTimestamp: candidate.modifiedAt) {
                 if latest == nil || parsed.timestamp > latest!.timestamp {
                     latest = parsed
                 }
@@ -134,7 +442,9 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
         var latest: TimestampedWindows?
         for line in content.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let lineData = line.data(using: .utf8) else { continue }
-            let payload = try JSONSerialization.jsonObject(with: lineData)
+            guard let payload = try? JSONSerialization.jsonObject(with: lineData) else {
+                continue
+            }
             guard
                 let object = payload as? [String: Any],
                 ProviderSupport.string(object["type"]) == "event_msg",

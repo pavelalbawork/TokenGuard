@@ -5,6 +5,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
 
     private let session: NetworkSession
     private let baseURL: URL
+    private let liveSnapshotReader: (any CodexLiveSnapshotReading)?
     private let snapshotReader: (any ConsumerUsageSnapshotReading)?
     private let cliParser: (any CLIParser)?
     private let identityReader: CodexAuthIdentityReader
@@ -13,15 +14,17 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     init(
         session: NetworkSession = URLSession.shared,
         baseURL: URL = URL(string: "https://api.openai.com")!,
+        liveSnapshotReader: (any CodexLiveSnapshotReading)? = CodexAppServerSnapshotReader(),
         snapshotReader: (any ConsumerUsageSnapshotReading)? = CompositeConsumerUsageSnapshotReader(readers: [
             CodexSessionSnapshotReader()
         ]),
-        cliParser: (any CLIParser)? = CodexCLIParser(),
+        cliParser: (any CLIParser)? = nil,
         identityReader: CodexAuthIdentityReader = CodexAuthIdentityReader(),
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         self.session = session
         self.baseURL = baseURL
+        self.liveSnapshotReader = liveSnapshotReader
         self.snapshotReader = snapshotReader
         self.cliParser = cliParser
         self.identityReader = identityReader
@@ -29,7 +32,11 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
-        try identityReader.readIdentity()
+        if let liveIdentity = try liveConsumerSnapshot()?.identity {
+            return liveIdentity
+        }
+
+        return try identityReader.readIdentity()
     }
 
     func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {
@@ -37,12 +44,12 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
         let planType = account.planType ?? (account.configurationValue(for: Account.ConfigurationKey.openAIOrganizationID) == nil ? "consumer" : "api")
 
         if planType == "consumer" {
-            let windows = try await consumerWindows(for: account, timestamp: timestamp)
+            let consumerSnapshot = try await consumerSnapshot(for: account, timestamp: timestamp)
             return UsageSnapshot(
                 accountId: account.id,
                 timestamp: timestamp,
-                windows: windows,
-                tier: "Consumer",
+                windows: consumerSnapshot.windows,
+                tier: consumerSnapshot.tier ?? "Consumer",
                 breakdown: nil,
                 isStale: false
             )
@@ -157,8 +164,8 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
 
     func validateCredentials(account: Account, credential: String) async throws -> Bool {
         if (account.planType ?? "api") == "consumer" {
-            let windows = try? await consumerWindows(for: account, timestamp: now())
-            return !(windows?.isEmpty ?? true)
+            let snapshot = try? await consumerSnapshot(for: account, timestamp: now())
+            return !(snapshot?.windows.isEmpty ?? true)
         }
 
         var request = URLRequest(url: baseURL.appending(path: "/v1/models"))
@@ -169,23 +176,37 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
         return true
     }
 
-    private func consumerWindows(for account: Account, timestamp: Date) async throws -> [UsageWindow] {
-        if let cliParser, let windows = try? await cliParser.parseUsageOutput(), !windows.isEmpty {
-            return windows
+    private func consumerSnapshot(for account: Account, timestamp: Date) async throws -> CodexConsumerSnapshot {
+        if let liveSnapshot = try? liveConsumerSnapshot(at: timestamp),
+           !liveSnapshot.windows.isEmpty {
+            return liveSnapshot
         }
 
         if let snapshotReader {
             let snapshotWindows = try? snapshotReader.windows(for: serviceType)
             if let windows = snapshotWindows ?? nil, !windows.isEmpty {
-                return windows
+                return CodexConsumerSnapshot(windows: windows, identity: nil, tier: nil)
             }
+        }
+
+        if let cliParser, let windows = try? await cliParser.parseUsageOutput(), !windows.isEmpty {
+            return CodexConsumerSnapshot(windows: windows, identity: nil, tier: nil)
         }
 
         _ = account
         _ = timestamp
         throw ServiceProviderError.unavailable(
-            "Codex consumer usage was not found in local Codex sessions, the fallback CodexBar snapshot, or the Codex CLI status probe on this Mac."
+            "Codex consumer usage was not found from Codex app-server, local Codex sessions, or the Codex CLI status probe on this Mac."
         )
+    }
+
+    private func liveConsumerSnapshot(at timestamp: Date? = nil) throws -> CodexConsumerSnapshot? {
+        guard let liveSnapshotReader else {
+            return nil
+        }
+
+        _ = timestamp
+        return try liveSnapshotReader.readSnapshot()
     }
 
     private func performRequest(
