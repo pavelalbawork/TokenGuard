@@ -13,9 +13,10 @@ struct AccountCardView: View {
             let state = pollingEngine.accountStates[account.id]
             let theme = themeManager.currentTheme
 
-            VStack(alignment: .leading, spacing: 12) {
+            CardHoverContainer(theme: theme) {
+                VStack(alignment: .leading, spacing: 14) {
                 if let snapshot = state?.snapshot {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 14) {
                         ForEach(snapshot.windows) { window in
                             UsageWindowRow(window: window)
                         }
@@ -75,16 +76,10 @@ struct AccountCardView: View {
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
+                }
+                .padding(16)
             }
-            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.surfaceContainerHigh.opacity(0.5))
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(theme.border, lineWidth: 1)
-            )
         }
     }
 
@@ -107,5 +102,27 @@ struct AccountCardView: View {
         if message.contains("key file not found") { return "Antigravity key file missing" }
         if message.contains("unexpected format") { return "Unsupported key format" }
         return message
+    }
+}
+
+struct CardHoverContainer<Content: View>: View {
+    let theme: Theme
+    @ViewBuilder let content: Content
+    
+    @State private var isHovered = false
+    
+    var body: some View {
+        content
+            .background(theme.surfaceContainerHigh.opacity(isHovered ? 0.7 : 0.5))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isHovered ? theme.primaryAccent.opacity(0.25) : theme.border, lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+            }
     }
 }

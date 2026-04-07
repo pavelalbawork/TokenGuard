@@ -163,32 +163,18 @@ struct AnthropicProvider: ServiceProvider {
         return true
     }
 
-    private func fetchClaudeConsumerUsage(account: Account, timestamp: Date) async throws -> (windows: [UsageWindow], tier: String?) {
-        if let liveUsage = try? await fetchClaudeOAuthUsage(timestamp: timestamp) {
-            return liveUsage
-        }
-
-        if let snapshotReader {
-            let snapshotWindows = try? snapshotReader.windows(for: serviceType)
-            if let windows = snapshotWindows ?? nil, !windows.isEmpty {
-                let tier = (try? authStatusReader.readStatus())?.subscriptionType?.capitalized ?? "Consumer"
-                return (windows, tier)
-            }
-        }
-
-        _ = account
-        _ = timestamp
-        let authStatus = try? authStatusReader.readStatus()
-        if let authStatus, authStatus.loggedIn {
-            let identity = authStatus.email ?? "your Claude account"
+    private func fetchClaudeConsumerUsage(account _: Account, timestamp: Date) async throws -> (windows: [UsageWindow], tier: String?) {
+        do {
+            return try await fetchClaudeOAuthUsage(timestamp: timestamp)
+        } catch let ServiceProviderError.unavailable(message) {
+            // Rate-limit and similar transitory errors already have a clear message — forward as-is.
+            throw ServiceProviderError.unavailable(message)
+        } catch {
+            // For unexpected errors, add the auth-refresh hint.
             throw ServiceProviderError.unavailable(
-                "Claude is signed in as \(identity), but the local usage credential is stale. Run `claude auth login` to refresh Claude Code's local credentials."
+                "\(error.localizedDescription)\n\nTry running `claude auth login` in Terminal to re-authenticate."
             )
         }
-
-        throw ServiceProviderError.unavailable(
-            "No live Claude limit data found. Sign into Claude Code on this Mac and then refresh."
-        )
     }
 
     private func fetchClaudeOAuthUsage(timestamp: Date) async throws -> (windows: [UsageWindow], tier: String?) {

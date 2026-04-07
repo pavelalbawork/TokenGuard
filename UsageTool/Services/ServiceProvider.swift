@@ -240,6 +240,23 @@ final class SystemCodexAppServerSession: NSObject, CodexAppServerSession, @unche
 
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["codex", "app-server"]
+
+        // GUI apps on macOS have a stripped PATH that doesn't include Homebrew
+        // or other user-installed paths. Augment the child process environment
+        // so that `env codex` can find the binary regardless of install location.
+        var environment = ProcessInfo.processInfo.environment
+        let extraPaths = [
+            "/opt/homebrew/bin",          // Homebrew on Apple Silicon
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",             // Homebrew on Intel / manual installs
+            "/usr/local/sbin",
+            (environment["HOME"] ?? "") + "/.local/bin",   // pipx / mise / etc.
+            (environment["HOME"] ?? "") + "/.cargo/bin",   // cargo-installed binaries
+        ].filter { !$0.isEmpty }
+        let systemPath = environment["PATH"] ?? "/usr/bin:/bin"
+        environment["PATH"] = (extraPaths + [systemPath]).joined(separator: ":")
+        process.environment = environment
+
         process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe

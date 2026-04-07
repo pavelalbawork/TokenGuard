@@ -8,7 +8,6 @@ enum NavigationTab: String, CaseIterable {
 
 struct MainPopoverView: View {
     @Environment(AccountStore.self) private var accountStore
-    @Environment(\.openWindow) private var openWindow
     @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
     
@@ -24,11 +23,24 @@ struct MainPopoverView: View {
         let theme = themeManager.currentTheme
         
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header: tabs on left, actions on right
+            HStack(spacing: 0) {
+                // Navigation tabs
+                HStack(spacing: 2) {
+                    ForEach(NavigationTab.allCases, id: \.self) { tab in
+                        headerTabButton(title: tab.rawValue, isSelected: selectedTab == tab && !showSettings && !isAddingAccount, theme: theme) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                showSettings = false
+                                isAddingAccount = false
+                                selectedTab = tab
+                            }
+                        }
+                    }
+                }
+                
                 Spacer()
                 
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Button(action: {
                         Task { await pollingEngine.refreshAll() }
                     }) {
@@ -36,12 +48,12 @@ struct MainPopoverView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 14, weight: .light))
+                                .font(.system(size: 13, weight: .light))
                                 .symbolRenderingMode(.hierarchical)
                         }
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.primaryAccent)
+                    .foregroundStyle(theme.textSecondary)
                     
                     Menu {
                         Picker("Theme", selection: $bindableThemeManager.selectedThemeId) {
@@ -51,36 +63,44 @@ struct MainPopoverView: View {
                         }
                     } label: {
                         Image(systemName: "paintpalette")
-                            .font(.system(size: 14, weight: .light))
+                            .font(.system(size: 13, weight: .light))
                             .symbolRenderingMode(.hierarchical)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.primaryAccent)
+                    .foregroundStyle(theme.textSecondary)
 
                     Button(action: {
-                        isAddingAccount = true
+                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            isAddingAccount = true
+                            showSettings = false
+                        }
                     }) {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 14, weight: .light))
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 13, weight: .light))
                             .symbolRenderingMode(.hierarchical)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.primaryAccent)
+                    .foregroundStyle(theme.textSecondary)
                     
                     Button(action: {
-                        withAnimation { showSettings.toggle() }
+                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            showSettings.toggle()
+                            if showSettings { isAddingAccount = false }
+                        }
                     }) {
                         Image(systemName: "gearshape")
-                            .font(.system(size: 14, weight: .light))
+                            .font(.system(size: 13, weight: .light))
                             .symbolRenderingMode(.hierarchical)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(theme.primaryAccent)
+                    .foregroundStyle(showSettings ? theme.primaryAccent : theme.textSecondary)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(theme.backgroundMain.opacity(0.8))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(theme.backgroundMain.opacity(0.95))
             .background(.ultraThinMaterial)
             .border(width: 1, edges: [.bottom], color: theme.border)
             .zIndex(1)
@@ -98,23 +118,10 @@ struct MainPopoverView: View {
                 .scrollIndicators(.hidden)
             } else {
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: 16) {
                         if !accountStore.accounts.isEmpty {
                             GlobalUsageHeroView()
                         }
-                        
-                        // Always show Nav Tabs at the top
-                        HStack {
-                            ForEach(NavigationTab.allCases, id: \.self) { tab in
-                                expandedNavButton(title: tab.rawValue, isSelected: selectedTab == tab, theme: theme) {
-                                    selectedTab = tab
-                                }
-                            }
-                        }
-                        .padding(4)
-                        .background(theme.surfaceContainerHigh.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
                         
                         // Router Content
                         Group {
@@ -184,31 +191,26 @@ struct MainPopoverView: View {
                 .scrollIndicators(.hidden)
             }
             
-            // Footer — Item 2: remove dead links, Item 7: version from Bundle
+            // Footer
             HStack {
                 Text(appVersion)
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(2.0)
-                    .foregroundStyle(theme.textSecondary.opacity(0.6))
-                    .textCase(.uppercase)
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.textSecondary.opacity(0.4))
 
                 Spacer()
 
-                Button(action: { 
-                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        isAddingAccount = true
-                    }
+                Button(action: {
+                    NSApplication.shared.terminate(nil)
                 }) {
-                    Text("ADD ACCOUNT")
+                    Text("QUIT")
                         .font(.system(size: 9, weight: .bold))
-                        .tracking(2.0)
-                        .foregroundStyle(theme.primaryAccent.opacity(0.7))
+                        .tracking(1.5)
+                        .foregroundStyle(theme.textSecondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 8)
             .background(theme.backgroundMain)
             .border(width: 1, edges: [.top], color: theme.border)
         }
@@ -224,22 +226,21 @@ struct MainPopoverView: View {
     }
 
     @ViewBuilder
-    private func expandedNavButton(title: String, isSelected: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
+    private func headerTabButton(title: String, isSelected: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
         Button(action: {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             action()
         }) {
             Text(title)
                 .font(.system(size: 9, weight: .bold))
-                .tracking(2.0)
-                .textCase(.uppercase)
-                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.8))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .tracking(1.5)
+                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.6))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 .background(
                     ZStack {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: 5)
                                 .fill(theme.surfaceContainerHigh)
                                 .matchedGeometryEffect(id: "TabHighlight", in: animationNameSpace)
                         }
@@ -307,21 +308,20 @@ struct GlobalUsageHeroView: View {
         let totalProgress = calculateGlobalProgress()
         
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("SYSTEM NODE")
-                    .font(.system(size: 11, weight: .bold))
-                    .tracking(2.5)
-                    .foregroundStyle(theme.secondaryAccent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("OVERALL")
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(2.0)
+                    .foregroundStyle(theme.textSecondary)
                 
-                // Item 1: show remaining, not used
                 Text("\(Int((1.0 - totalProgress) * 100))%")
-                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .font(.system(size: 28, weight: .black, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                 
-                Text("CAPACITY REMAINING")
-                    .font(.system(size: 11, weight: .medium))
+                Text("AVG. REMAINING")
+                    .font(.system(size: 9, weight: .medium))
                     .tracking(0.5)
-                    .foregroundStyle(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary.opacity(0.7))
             }
             
             Spacer()
@@ -331,20 +331,20 @@ struct GlobalUsageHeroView: View {
                     progress: totalProgress,
                     theme: theme
                 )
-                .frame(width: 80, height: 80)
+                .frame(width: 60, height: 60)
                 
                 Image(systemName: "bolt.fill")
-                    .font(.system(size: 24, weight: .light))
+                    .font(.system(size: 18, weight: .light))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(theme.secondaryAccent)
             }
-            .padding(4)
         }
-        .padding(20)
-        .background(theme.surfaceContainerHigh.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(theme.surfaceContainerHigh.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(theme.border, lineWidth: 1)
         )
     }

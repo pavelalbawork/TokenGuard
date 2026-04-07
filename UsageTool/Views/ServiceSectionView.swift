@@ -67,51 +67,40 @@ struct ServiceSectionView: View {
             }
 
             // ── Account Cards ───────────────────────────────────────────
-            if accounts.count == 1, let account = accounts.first {
-                // Full-width single card
-                accountCard(account: account, isLive: activeConsumerAccountId == account.id, theme: theme)
-            } else {
-                // Side-by-side 2-column grid
-                let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(accounts) { account in
-                        VStack(alignment: .leading, spacing: 6) {
-                            // Per-card mini header (name + LIVE badge)
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.crop.square.fill")
-                                    .font(.system(size: 9, weight: .regular))
+            ForEach(accounts) { account in
+                VStack(alignment: .leading, spacing: 6) {
+                    // Show per-account header when multiple accounts exist
+                    if accounts.count > 1 {
+                        HStack(spacing: 4) {
+                            Image(systemName: "person.crop.square.fill")
+                                .font(.system(size: 9, weight: .regular))
+                                .foregroundStyle(serviceType.tintColor(for: theme))
+
+                            Text(account.name.uppercased())
+                                .font(.system(size: 8, weight: .black))
+                                .tracking(0.5)
+                                .foregroundStyle(theme.textSecondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            if activeConsumerAccountId == account.id {
+                                Text("LIVE")
+                                    .font(.system(size: 7, weight: .bold))
+                                    .padding(.horizontal, 3)
+                                    .padding(.vertical, 1)
+                                    .background(serviceType.tintColor(for: theme).opacity(0.15), in: .rect(cornerRadius: 2))
                                     .foregroundStyle(serviceType.tintColor(for: theme))
-
-                                Text(account.name.uppercased())
-                                    .font(.system(size: 7, weight: .black))
-                                    .foregroundStyle(theme.textSecondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .minimumScaleFactor(0.7)
-
-                                if activeConsumerAccountId == account.id {
-                                    Text("LIVE")
-                                        .font(.system(size: 7, weight: .bold))
-                                        .padding(.horizontal, 3)
-                                        .padding(.vertical, 1)
-                                        .background(serviceType.tintColor(for: theme).opacity(0.15), in: .rect(cornerRadius: 2))
-                                        .foregroundStyle(serviceType.tintColor(for: theme))
-                                }
-
-                                if let connectionStatus = pollingEngine.accountStates[account.id]?.connectionStatus {
-                                    connectionBadge(connectionStatus, theme: theme)
-                                }
-
-                                Spacer()
                             }
 
-                            AccountCardView(account: account)
-                        }
-                        .overlay(alignment: .topTrailing) {
-                            deleteButton(for: account, theme: theme)
-                                .offset(x: 6, y: -6)
+                            if let connectionStatus = pollingEngine.accountStates[account.id]?.connectionStatus {
+                                connectionBadge(connectionStatus, theme: theme)
+                            }
+
+                            Spacer()
                         }
                     }
+
+                    accountCard(account: account, isLive: activeConsumerAccountId == account.id, theme: theme)
                 }
             }
 

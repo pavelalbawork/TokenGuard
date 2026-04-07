@@ -26,6 +26,7 @@ final class UsagePollingEngine {
     var serviceRefreshIntervals: [ServiceType: TimeInterval]
     var accountStates: [UUID: AccountRefreshState]
     var isRefreshing: Bool
+    private var pendingForceRefresh: Bool = false
 
     @ObservationIgnored
     private var pollingTask: Task<Void, Never>?
@@ -107,45 +108,62 @@ final class UsagePollingEngine {
     }
 
     func refreshAll(force: Bool = true) async {
-        guard !isRefreshing else { return }
-        await synchronizeActiveConsumerAccounts()
-        if force {
-            await codexClient.requestImmediateRefresh()
+        if isRefreshing {
+            if force { pendingForceRefresh = true }
+            return
         }
 
-        isRefreshing = true
-        defer { isRefreshing = false }
+        var shouldForce = force
 
-        let accounts = accountStore.accounts
-            .filter(\.isEnabled)
-            .filter { shouldPoll($0) }
-            .filter { account in
-                force || shouldRefresh(account)
+        repeat {
+            await synchronizeActiveConsumerAccounts()
+            if shouldForce {
+                await codexClient.requestImmediateRefresh()
             }
-        await withTaskGroup(of: (UUID, Result<UsageSnapshot, Error>).self) { group in
-            for account in accounts {
-                group.addTask { [providers, keychainManager] in
-                    guard let provider = providers[account.serviceType] else {
-                        return (account.id, .failure(ServiceProviderError.unavailable("No provider registered for \(account.serviceType.rawValue).")))
-                    }
 
-                    do {
-                        let credential = try Self.pollingCredential(
-                            for: account,
-                            keychainManager: keychainManager
-                        )
-                        let snapshot = try await provider.fetchUsage(account: account, credential: credential)
-                        return (account.id, .success(snapshot))
-                    } catch {
-                        return (account.id, .failure(error))
+            isRefreshing = true
+
+            let accounts = accountStore.accounts
+                .filter(\.isEnabled)
+                .filter { shouldPoll($0) }
+                .filter { account in
+                    shouldForce || shouldRefresh(account)
+                }
+            await withTaskGroup(of: (UUID, Result<UsageSnapshot, Error>).self) { group in
+                for account in accounts {
+                    group.addTask { [providers, keychainManager] in
+                        guard let provider = providers[account.serviceType] else {
+                            return (account.id, .failure(ServiceProviderError.unavailable("No provider registered for \(account.serviceType.rawValue).")))
+                        }
+
+                        do {
+                            let credential = try Self.pollingCredential(
+                                for: account,
+                                keychainManager: keychainManager
+                            )
+                            let snapshot = try await provider.fetchUsage(account: account, credential: credential)
+                            return (account.id, .success(snapshot))
+                        } catch {
+                            return (account.id, .failure(error))
+                        }
                     }
+                }
+
+                for await (accountID, result) in group {
+                    apply(result: result, to: accountID)
                 }
             }
 
-            for await (accountID, result) in group {
-                apply(result: result, to: accountID)
+            isRefreshing = false
+
+            // If a forced refresh was requested while we were mid-cycle, honor it now.
+            if pendingForceRefresh {
+                pendingForceRefresh = false
+                shouldForce = true
+            } else {
+                break
             }
-        }
+        } while true
     }
 
     func refresh(accountID: UUID) async {
@@ -339,13 +357,34 @@ final class UsagePollingEngine {
             $0.isEnabled && $0.serviceType == .codex && $0.planType == "consumer"
         }
 
+        NSLog("[CodexSync] liveState.identity=%@ status=%@ accounts=%d",
+              liveState.identity?.email ?? "nil",
+              "\(liveState.status)",
+              codexAccounts.count)
+
         guard !codexAccounts.isEmpty else { return }
 
         if codexAccounts.count > 1,
            let identity = liveState.identity,
            let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
-            if accountStore.activeConsumerAccountID(for: .codex) != matchedAccount.id {
+            NSLog("[CodexSync] matched account: %@ id=%@", matchedAccount.name, matchedAccount.id.uuidString)
+            let previousActiveID = accountStore.activeConsumerAccountID(for: .codex)
+            NSLog("[CodexSync] previousActiveID=%@ matchedID=%@",
+                  previousActiveID?.uuidString ?? "nil",
+                  matchedAccount.id.uuidString)
+            if previousActiveID != matchedAccount.id {
+                NSLog("[CodexSync] SWITCHING active account to %@", matchedAccount.name)
                 try? accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
+
+                // Fully wipe the old account's state so the UI shows
+                // "Inactive saved account" instead of stale snapshot data.
+                if let previousActiveID {
+                    var updatedStates = accountStates
+                    updatedStates.removeValue(forKey: previousActiveID)
+                    accountStates = updatedStates
+                }
+            } else {
+                NSLog("[CodexSync] already on correct account")
             }
 
             let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)

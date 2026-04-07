@@ -84,7 +84,17 @@ struct AntigravityProvider: ServiceProvider {
             accounts = try await readAccountsDirect()
         }
 
-        guard let active = accounts.first(where: { $0.isActive }) ?? accounts.first else {
+        // Match this UsageTool account's name (email) to the corresponding
+        // Antigravity database account.  Fall back to the active/first account
+        // when no email matches, preserving existing single-account behavior.
+        let target: AntigravityAccount
+        if let byName = accounts.first(where: {
+            $0.email.localizedCaseInsensitiveCompare(account.name) == .orderedSame
+        }) {
+            target = byName
+        } else if let active = accounts.first(where: { $0.isActive }) ?? accounts.first {
+            target = active
+        } else {
             throw ServiceProviderError.unavailable("No Antigravity accounts found.")
         }
 
@@ -92,7 +102,7 @@ struct AntigravityProvider: ServiceProvider {
         var windows: [UsageWindow] = []
         var breakdown: [UsageBreakdown] = []
 
-        for pool in active.pools {
+        for pool in target.pools {
             let usedPercent = Double(100 - pool.remainingPercent)
             windows.append(UsageWindow(
                 windowType: .daily,
@@ -116,7 +126,7 @@ struct AntigravityProvider: ServiceProvider {
             accountId: account.id,
             timestamp: timestamp,
             windows: windows,
-            tier: active.email,
+            tier: target.email,
             breakdown: breakdown.isEmpty ? nil : breakdown,
             isStale: false
         )

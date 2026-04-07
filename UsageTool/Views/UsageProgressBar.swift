@@ -17,7 +17,7 @@ struct UsageProgressBar: View {
                     .shadow(color: color.opacity(0.6), radius: 4, x: 0, y: 0)
             }
         }
-        .frame(height: 6) // Match Stitch .h-1.5 (6px)
+        .frame(height: 8)
     }
 
     private var color: Color {
