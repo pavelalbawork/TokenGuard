@@ -53,6 +53,9 @@ struct ServiceSectionView: View {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
+                    if let connectionStatus = state?.connectionStatus {
+                        connectionBadge(connectionStatus, theme: theme)
+                    }
                 }
 
                 Spacer()
@@ -93,6 +96,10 @@ struct ServiceSectionView: View {
                                         .padding(.vertical, 1)
                                         .background(serviceType.tintColor(for: theme).opacity(0.15), in: .rect(cornerRadius: 2))
                                         .foregroundStyle(serviceType.tintColor(for: theme))
+                                }
+
+                                if let connectionStatus = pollingEngine.accountStates[account.id]?.connectionStatus {
+                                    connectionBadge(connectionStatus, theme: theme)
                                 }
 
                                 Spacer()
@@ -195,6 +202,42 @@ struct ServiceSectionView: View {
         .background(theme.surfaceContainerHigh.opacity(0.45))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func connectionBadge(_ status: CodexConnectionStatus, theme: Theme) -> some View {
+        Text(connectionLabel(for: status))
+            .font(.system(size: 8, weight: .bold))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(connectionColor(for: status, theme: theme).opacity(0.12), in: .rect(cornerRadius: 3))
+            .foregroundStyle(connectionColor(for: status, theme: theme))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func connectionLabel(for status: CodexConnectionStatus) -> String {
+        switch status {
+        case .live:
+            return "LIVE"
+        case .staleFallback:
+            return "STALE"
+        case .connecting:
+            return "RECONNECTING"
+        case .error:
+            return "ERROR"
+        }
+    }
+
+    private func connectionColor(for status: CodexConnectionStatus, theme: Theme) -> Color {
+        switch status {
+        case .live:
+            return serviceType.tintColor(for: theme)
+        case .staleFallback, .connecting:
+            return theme.secondaryAccent
+        case .error:
+            return theme.error
+        }
     }
 }
 

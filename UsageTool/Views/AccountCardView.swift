@@ -58,6 +58,14 @@ struct AccountCardView: View {
                             .font(.system(size: 8, weight: .medium))
                             .foregroundStyle(theme.textSecondary.opacity(0.7))
                     }
+                } else if state?.connectionStatus == .connecting {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Connecting to Codex\u{2026}")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(theme.textSecondary)
+                    }
                 } else {
                     HStack(spacing: 6) {
                         ProgressView()

@@ -36,10 +36,9 @@ struct UsageToolApp: App {
                 .environment(accountStore)
                 .environment(pollingEngine)
                 .environment(themeManager)
-                .frame(width: 360, height: 560)
+                .frame(width: 360, height: 800)
                 .onAppear {
                     pollingEngine.start()
-                    Task { await pollingEngine.refreshAll(force: true) }
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(

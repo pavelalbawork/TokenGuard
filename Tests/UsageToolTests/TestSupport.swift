@@ -160,3 +160,98 @@ final class InMemoryKeychainBackingStore: KeychainBackingStore, @unchecked Senda
         return "\(service)::\(account)"
     }
 }
+
+final class MockCodexAppServerSession: CodexAppServerSession, @unchecked Sendable {
+    typealias SendHandler = @Sendable (String, MockCodexAppServerSession) -> Void
+
+    let events: AsyncStream<CodexAppServerEvent>
+    private let continuation: AsyncStream<CodexAppServerEvent>.Continuation
+    private let sendHandler: SendHandler?
+
+    init(sendHandler: SendHandler? = nil) {
+        self.sendHandler = sendHandler
+        var streamContinuation: AsyncStream<CodexAppServerEvent>.Continuation!
+        self.events = AsyncStream { continuation in
+            streamContinuation = continuation
+        }
+        self.continuation = streamContinuation
+    }
+
+    func send(jsonLine: String) throws {
+        sendHandler?(jsonLine, self)
+    }
+
+    func stop() {
+        continuation.yield(.terminated(0))
+        continuation.finish()
+    }
+
+    func emit(_ event: CodexAppServerEvent) {
+        continuation.yield(event)
+    }
+
+    func finish() {
+        continuation.finish()
+    }
+}
+
+struct MockCodexAppServerSessionFactory: CodexAppServerSessionFactory {
+    let makeSessionHandler: @Sendable () -> CodexAppServerSession
+
+    func makeSession() throws -> CodexAppServerSession {
+        makeSessionHandler()
+    }
+}
+
+func makeBootstrapCodexSession(
+    email: String,
+    planType: String,
+    primaryUsedPercent: Int,
+    secondaryUsedPercent: Int
+) -> MockCodexAppServerSession {
+    MockCodexAppServerSession { line, session in
+        guard let data = line.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = payload["id"] as? Int else {
+            return
+        }
+
+        if id == 1 {
+            session.emit(.stdout("""
+{"id":1,"result":{"userAgent":"Codex Desktop","codexHome":"/Users/palba/.codex","platformFamily":"unix","platformOs":"macos"}}
+"""))
+        }
+
+        if id == 2 {
+            session.emit(.stdout("""
+{"id":2,"result":{"account":{"type":"chatgpt","email":"\(email)","planType":"\(planType)"},"requiresOpenaiAuth":true}}
+"""))
+        }
+
+        if id == 3 {
+            session.emit(.stdout("""
+{"id":3,"result":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":\(primaryUsedPercent),"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":\(secondaryUsedPercent),"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"\(planType)"},"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,"primary":{"usedPercent":\(primaryUsedPercent),"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":\(secondaryUsedPercent),"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"\(planType)"}}}}
+"""))
+        }
+    }
+}
+
+func makeRateLimitUpdate(primaryUsedPercent: Int, secondaryUsedPercent: Int, planType: String = "team") -> CodexAppServerEvent {
+    .stdout("""
+{"method":"account/rateLimits/updated","params":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":\(primaryUsedPercent),"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":\(secondaryUsedPercent),"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"\(planType)"}}}
+""")
+}
+
+@MainActor
+func waitUntil(
+    timeout: TimeInterval = 1,
+    pollInterval: TimeInterval = 0.01,
+    predicate: @escaping @MainActor () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if predicate() { return true }
+        try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+    }
+    return predicate()
+}

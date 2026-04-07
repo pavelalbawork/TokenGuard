@@ -5,7 +5,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
 
     private let session: NetworkSession
     private let baseURL: URL
-    private let liveSnapshotReader: (any CodexLiveSnapshotReading)?
+    private let codexLiveStateProvider: (any CodexLiveStateProviding)?
     private let snapshotReader: (any ConsumerUsageSnapshotReading)?
     private let cliParser: (any CLIParser)?
     private let identityReader: CodexAuthIdentityReader
@@ -14,7 +14,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     init(
         session: NetworkSession = URLSession.shared,
         baseURL: URL = URL(string: "https://api.openai.com")!,
-        liveSnapshotReader: (any CodexLiveSnapshotReading)? = CodexAppServerSnapshotReader(),
+        codexLiveStateProvider: (any CodexLiveStateProviding)? = nil,
         snapshotReader: (any ConsumerUsageSnapshotReading)? = CompositeConsumerUsageSnapshotReader(readers: [
             CodexSessionSnapshotReader()
         ]),
@@ -24,7 +24,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     ) {
         self.session = session
         self.baseURL = baseURL
-        self.liveSnapshotReader = liveSnapshotReader
+        self.codexLiveStateProvider = codexLiveStateProvider
         self.snapshotReader = snapshotReader
         self.cliParser = cliParser
         self.identityReader = identityReader
@@ -32,7 +32,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
-        if let liveIdentity = try liveConsumerSnapshot()?.identity {
+        if let liveIdentity = await codexLiveStateProvider?.currentState().identity {
             return liveIdentity
         }
 
@@ -177,9 +177,15 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     private func consumerSnapshot(for account: Account, timestamp: Date) async throws -> CodexConsumerSnapshot {
-        if let liveSnapshot = try? liveConsumerSnapshot(at: timestamp),
-           !liveSnapshot.windows.isEmpty {
-            return liveSnapshot
+        if let liveState = await codexLiveStateProvider?.currentState() {
+            if let liveSnapshot = liveState.snapshot, !liveSnapshot.windows.isEmpty {
+                return liveSnapshot
+            }
+
+            if let lastErrorText = liveState.lastErrorText,
+               liveState.status == .error {
+                throw ServiceProviderError.unavailable(lastErrorText)
+            }
         }
 
         if let snapshotReader {
@@ -198,15 +204,6 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
         throw ServiceProviderError.unavailable(
             "Codex consumer usage was not found from Codex app-server, local Codex sessions, or the Codex CLI status probe on this Mac."
         )
-    }
-
-    private func liveConsumerSnapshot(at timestamp: Date? = nil) throws -> CodexConsumerSnapshot? {
-        guard let liveSnapshotReader else {
-            return nil
-        }
-
-        _ = timestamp
-        return try liveSnapshotReader.readSnapshot()
     }
 
     private func performRequest(

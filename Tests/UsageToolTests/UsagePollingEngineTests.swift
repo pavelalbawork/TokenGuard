@@ -36,35 +36,39 @@ final class UsagePollingEngineTests: XCTestCase {
         try accountStore.add(firstAccount)
         try accountStore.add(secondAccount)
 
-        let provider = MockConsumerIdentityProvider(
-            identity: ConsumerAccountIdentity(email: "new@example.com", externalID: "acct-2"),
-            snapshot: UsageSnapshot(
-                accountId: secondAccount.id,
-                timestamp: Date(timeIntervalSince1970: 1_710_000_000),
-                windows: [
-                    UsageWindow(windowType: .rolling5h, used: 42, limit: 100, unit: .percent, resetDate: nil)
-                ],
-                tier: "Consumer"
-            )
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory {
+                makeBootstrapCodexSession(
+                    email: "new@example.com",
+                    planType: "team",
+                    primaryUsedPercent: 42,
+                    secondaryUsedPercent: 75
+                )
+            },
+            now: { Date(timeIntervalSince1970: 1_710_000_000) },
+            sleep: { _ in },
+            reconnectBackoff: [0]
         )
 
         let engine = UsagePollingEngine(
             accountStore: accountStore,
             keychainManager: keychainManager,
-            providers: [.codex: provider],
+            codexClient: codexClient,
+            providers: [.codex: OpenAIProvider(codexLiveStateProvider: codexClient)],
             serviceRefreshIntervals: [.codex: 300],
             sleep: { _ in }
         )
 
-        await engine.refreshAll()
+        engine.start()
+        let didUpdate = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == secondAccount.id &&
+            engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used == 42
+        }
 
+        XCTAssertTrue(didUpdate)
         XCTAssertEqual(accountStore.activeConsumerAccountID(for: .codex), secondAccount.id)
         XCTAssertEqual(engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used, 42)
-        XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
-        XCTAssertEqual(
-            accountStore.accounts.first(where: { $0.id == secondAccount.id })?.consumerExternalID,
-            "acct-2"
-        )
+        XCTAssertEqual(accountStore.accounts.first(where: { $0.id == secondAccount.id })?.consumerEmail, "new@example.com")
     }
 
     func testRefreshSkipsInactiveCodexConsumerAfterIdentitySync() async throws {
@@ -99,31 +103,39 @@ final class UsagePollingEngineTests: XCTestCase {
         try accountStore.add(firstAccount)
         try accountStore.add(secondAccount)
 
-        let provider = MockConsumerIdentityProvider(
-            identity: ConsumerAccountIdentity(email: "old@example.com", externalID: "acct-1"),
-            snapshot: UsageSnapshot(
-                accountId: firstAccount.id,
-                timestamp: Date(timeIntervalSince1970: 1_710_000_000),
-                windows: [
-                    UsageWindow(windowType: .rolling5h, used: 17, limit: 100, unit: .percent, resetDate: nil)
-                ],
-                tier: "Consumer"
-            )
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory {
+                makeBootstrapCodexSession(
+                    email: "old@example.com",
+                    planType: "team",
+                    primaryUsedPercent: 17,
+                    secondaryUsedPercent: 80
+                )
+            },
+            now: { Date(timeIntervalSince1970: 1_710_000_000) },
+            sleep: { _ in },
+            reconnectBackoff: [0]
         )
 
         let engine = UsagePollingEngine(
             accountStore: accountStore,
             keychainManager: keychainManager,
-            providers: [.codex: provider],
+            codexClient: codexClient,
+            providers: [.codex: OpenAIProvider(codexLiveStateProvider: codexClient)],
             serviceRefreshIntervals: [.codex: 300],
             sleep: { _ in }
         )
 
-        await engine.refresh(accountID: secondAccount.id)
+        engine.start()
+        let didUpdate = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == firstAccount.id &&
+            engine.accountStates[firstAccount.id]?.snapshot?.windows.first?.used == 17
+        }
 
+        XCTAssertTrue(didUpdate)
         XCTAssertEqual(accountStore.activeConsumerAccountID(for: .codex), firstAccount.id)
         XCTAssertNil(engine.accountStates[secondAccount.id]?.lastAttemptAt)
-        XCTAssertEqual(engine.accountStates[firstAccount.id]?.snapshot?.windows.first?.used, nil)
+        XCTAssertEqual(engine.accountStates[firstAccount.id]?.snapshot?.windows.first?.used, 17)
     }
 
     func testLoadsCachedSnapshotAndMarksItStaleOnRefreshFailure() async throws {

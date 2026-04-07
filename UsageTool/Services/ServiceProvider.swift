@@ -22,8 +22,45 @@ struct CodexConsumerSnapshot: Sendable, Equatable {
     let tier: String?
 }
 
-protocol CodexLiveSnapshotReading: Sendable {
-    func readSnapshot() throws -> CodexConsumerSnapshot?
+enum CodexConnectionStatus: String, Sendable {
+    case connecting
+    case live
+    case staleFallback
+    case error
+}
+
+struct CodexLiveState: Sendable, Equatable {
+    var snapshot: CodexConsumerSnapshot?
+    var identity: ConsumerAccountIdentity?
+    var status: CodexConnectionStatus
+    var lastUpdateAt: Date?
+    var lastErrorText: String?
+}
+
+protocol CodexLiveStateProviding: Sendable {
+    func currentState() async -> CodexLiveState
+}
+
+enum CodexAppServerEvent: Sendable, Equatable {
+    case stdout(String)
+    case stderr(String)
+    case terminated(Int32)
+}
+
+protocol CodexAppServerSession: AnyObject, Sendable {
+    var events: AsyncStream<CodexAppServerEvent> { get }
+    func send(jsonLine: String) throws
+    func stop()
+}
+
+protocol CodexAppServerSessionFactory: Sendable {
+    func makeSession() throws -> CodexAppServerSession
+}
+
+struct SystemCodexAppServerSessionFactory: CodexAppServerSessionFactory {
+    func makeSession() throws -> CodexAppServerSession {
+        SystemCodexAppServerSession()
+    }
 }
 
 struct ConsumerAccountIdentity: Sendable, Equatable {
@@ -66,121 +103,47 @@ struct CodexAuthIdentityReader: Sendable {
     }
 }
 
-struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
-    typealias AppServerRunner = @Sendable (_ input: String, _ timeout: TimeInterval) throws -> (stdout: String, stderr: String, exitCode: Int32)
-
-    private let timeout: TimeInterval
-    private let runner: AppServerRunner
-
-    init(
-        timeout: TimeInterval = 5,
-        runner: @escaping AppServerRunner = Self.runAppServer
-    ) {
-        self.timeout = timeout
-        self.runner = runner
-    }
-
-    func readSnapshot() throws -> CodexConsumerSnapshot? {
-        let requests = [
-            makeRequest(
-                id: 1,
-                method: "initialize",
-                params: [
-                    "clientInfo": [
-                        "name": "UsageTool",
-                        "version": "1.0"
-                    ],
-                    "capabilities": NSNull()
-                ]
-            ),
-            makeRequest(
-                id: 2,
-                method: "account/read",
-                params: [
-                    "refreshToken": false
-                ]
-            ),
-            makeRequest(
-                id: 3,
-                method: "account/rateLimits/read",
-                params: NSNull()
-            )
-        ]
-
-        let input = requests.map { request in
-            let data = try! JSONSerialization.data(withJSONObject: request)
-            return String(decoding: data, as: UTF8.self)
-        }.joined(separator: "\n") + "\n"
-
-        let output = try runner(input, timeout)
-        guard output.exitCode == 0 else {
-            throw ServiceProviderError.unavailable(output.stderr.isEmpty ? "Codex app-server exited with status \(output.exitCode)." : output.stderr)
-        }
-
-        let responses = try parseResponses(from: output.stdout)
-        guard let rateLimitsResponse = responses[3],
-              let result = rateLimitsResponse["result"] as? [String: Any]
-        else {
-            return nil
-        }
-
-        let accountResult = (responses[2]?["result"] as? [String: Any]) ?? [:]
-        let identity = parseIdentity(from: accountResult)
-        let tier = parseTier(from: result, accountResult: accountResult)
-        let windows = parseWindows(from: result)
-
-        guard !windows.isEmpty else {
-            return nil
-        }
-
-        return CodexConsumerSnapshot(windows: windows, identity: identity, tier: tier)
-    }
-
-    private func makeRequest(id: Int, method: String, params: Any) -> [String: Any] {
-        [
-            "jsonrpc": "2.0",
-            "id": id,
-            "method": method,
-            "params": params
-        ]
-    }
-
-    private func parseResponses(from stdout: String) throws -> [Int: [String: Any]] {
-        var responses: [Int: [String: Any]] = [:]
-
-        for line in stdout.split(whereSeparator: \.isNewline) {
-            guard let data = line.data(using: .utf8) else { continue }
-            let payload = try JSONSerialization.jsonObject(with: data)
-            guard let object = payload as? [String: Any],
-                  let id = ProviderSupport.int(object["id"]) else {
-                continue
-            }
-            responses[id] = object
-        }
-
-        return responses
-    }
-
-    private func parseIdentity(from accountResult: [String: Any]) -> ConsumerAccountIdentity? {
+enum CodexAppServerPayloadParser {
+    static func parseIdentity(from accountResult: [String: Any]) -> ConsumerAccountIdentity? {
         guard let account = accountResult["account"] as? [String: Any] else {
             return nil
         }
 
-        let email = ProviderSupport.string(account["email"])
-        guard email != nil else {
+        guard let email = ProviderSupport.string(account["email"]) else {
             return nil
         }
 
         return ConsumerAccountIdentity(email: email, externalID: nil)
     }
 
-    private func parseTier(from rateLimitResult: [String: Any], accountResult: [String: Any]) -> String? {
+    static func parseSnapshot(rateLimitResult: [String: Any], accountResult: [String: Any]? = nil) -> CodexConsumerSnapshot? {
+        let identity = accountResult.flatMap(parseIdentity(from:))
+        let tier = parseTier(from: rateLimitResult, accountResult: accountResult)
+        let windows = parseWindows(from: rateLimitResult)
+        guard !windows.isEmpty else { return nil }
+        return CodexConsumerSnapshot(windows: windows, identity: identity, tier: tier)
+    }
+
+    static func parseSnapshot(notificationParams: [String: Any]) -> CodexConsumerSnapshot? {
+        guard let rateLimits = notificationParams["rateLimits"] as? [String: Any] else {
+            return nil
+        }
+        let tier = ProviderSupport.string(rateLimits["planType"])?.capitalized
+        let windows = [
+            makeWindow(from: rateLimits["primary"] as? [String: Any]),
+            makeWindow(from: rateLimits["secondary"] as? [String: Any])
+        ].compactMap { $0 }
+        guard !windows.isEmpty else { return nil }
+        return CodexConsumerSnapshot(windows: windows, identity: nil, tier: tier)
+    }
+
+    private static func parseTier(from rateLimitResult: [String: Any], accountResult: [String: Any]?) -> String? {
         if let rateLimits = selectedRateLimitSnapshot(from: rateLimitResult),
            let tier = ProviderSupport.string(rateLimits["planType"]) {
             return tier.capitalized
         }
 
-        if let account = accountResult["account"] as? [String: Any],
+        if let account = accountResult?["account"] as? [String: Any],
            let tier = ProviderSupport.string(account["planType"]) {
             return tier.capitalized
         }
@@ -188,7 +151,7 @@ struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
         return nil
     }
 
-    private func parseWindows(from rateLimitResult: [String: Any]) -> [UsageWindow] {
+    private static func parseWindows(from rateLimitResult: [String: Any]) -> [UsageWindow] {
         guard let snapshot = selectedRateLimitSnapshot(from: rateLimitResult) else {
             return []
         }
@@ -199,7 +162,7 @@ struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
         ].compactMap { $0 }
     }
 
-    private func selectedRateLimitSnapshot(from result: [String: Any]) -> [String: Any]? {
+    private static func selectedRateLimitSnapshot(from result: [String: Any]) -> [String: Any]? {
         if let byLimitID = result["rateLimitsByLimitId"] as? [String: Any],
            let codex = byLimitID["codex"] as? [String: Any] {
             return codex
@@ -208,7 +171,7 @@ struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
         return result["rateLimits"] as? [String: Any]
     }
 
-    private func makeWindow(from limit: [String: Any]?) -> UsageWindow? {
+    private static func makeWindow(from limit: [String: Any]?) -> UsageWindow? {
         guard
             let limit,
             let usedPercent = ProviderSupport.double(limit["usedPercent"])
@@ -229,7 +192,7 @@ struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
         )
     }
 
-    private func windowType(for windowMinutes: Int?) -> WindowType {
+    private static func windowType(for windowMinutes: Int?) -> WindowType {
         switch windowMinutes {
         case 300:
             return .rolling5h
@@ -242,125 +205,370 @@ struct CodexAppServerSnapshotReader: CodexLiveSnapshotReading {
         }
     }
 
-    private func unixDate(_ value: Any?) -> Date? {
+    private static func unixDate(_ value: Any?) -> Date? {
         guard let timestamp = ProviderSupport.double(value) else {
             return nil
         }
 
         return Date(timeIntervalSince1970: timestamp)
     }
+}
 
-    private static func runAppServer(input: String, timeout: TimeInterval) throws -> (stdout: String, stderr: String, exitCode: Int32) {
-        final class OutputCollector: @unchecked Sendable {
-            private let lock = NSLock()
-            private var stdout = ""
-            private var stderr = ""
-            private var stdoutBuffer = Data()
-            private var foundRateLimits = false
+final class SystemCodexAppServerSession: NSObject, CodexAppServerSession, @unchecked Sendable {
+    private let process: Process
+    private let stdinPipe: Pipe
+    private let stdoutPipe: Pipe
+    private let stderrPipe: Pipe
+    private let continuation: AsyncStream<CodexAppServerEvent>.Continuation
+    let events: AsyncStream<CodexAppServerEvent>
+    private let stdoutLock = NSLock()
+    private let stderrLock = NSLock()
+    private var stdoutBuffer = Data()
+    private var stderrBuffer = Data()
 
-            func append(_ data: Data, stdout isStdout: Bool) {
-                guard !data.isEmpty else { return }
-
-                lock.lock()
-                defer { lock.unlock() }
-
-                if isStdout {
-                    stdoutBuffer.append(data)
-                    while let newlineIndex = stdoutBuffer.firstIndex(of: 0x0A) {
-                        let lineData = stdoutBuffer.prefix(upTo: newlineIndex)
-                        stdoutBuffer.removeSubrange(...newlineIndex)
-                        guard !lineData.isEmpty else { continue }
-                        let line = String(decoding: lineData, as: UTF8.self)
-                        stdout += line + "\n"
-                        if line.contains("\"id\":3") || line.contains("\"method\":\"account/rateLimits/updated\"") {
-                            foundRateLimits = true
-                        }
-                    }
-                } else {
-                    stderr += String(decoding: data, as: UTF8.self)
-                }
-            }
-
-            func flushRemainder() -> (stdout: String, stderr: String, foundRateLimits: Bool) {
-                lock.lock()
-                defer { lock.unlock() }
-
-                if !stdoutBuffer.isEmpty {
-                    stdout += String(decoding: stdoutBuffer, as: UTF8.self)
-                    stdoutBuffer.removeAll()
-                }
-
-                return (stdout, stderr, foundRateLimits)
-            }
-
-            func hasFoundRateLimits() -> Bool {
-                lock.lock()
-                defer { lock.unlock() }
-                return foundRateLimits
-            }
+    override init() {
+        process = Process()
+        stdinPipe = Pipe()
+        stdoutPipe = Pipe()
+        stderrPipe = Pipe()
+        var streamContinuation: AsyncStream<CodexAppServerEvent>.Continuation!
+        events = AsyncStream { continuation in
+            streamContinuation = continuation
         }
+        continuation = streamContinuation
+        super.init()
 
-        let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["codex", "app-server"]
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        let stdinPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
-        process.standardInput = stdinPipe
 
-        let collector = OutputCollector()
-        let completed = DispatchSemaphore(value: 0)
-        let rateLimitsReady = DispatchSemaphore(value: 0)
+        stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            self?.append(handle.availableData, stdout: true)
+        }
 
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            collector.append(handle.availableData, stdout: true)
-            if collector.hasFoundRateLimits() {
-                rateLimitsReady.signal()
+        stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            self?.append(handle.availableData, stdout: false)
+        }
+
+        process.terminationHandler = { [weak self] process in
+            guard let self else { return }
+            self.flushBuffers()
+            self.continuation.yield(.terminated(process.terminationStatus))
+            self.continuation.finish()
+        }
+
+        try! process.run()
+    }
+
+    func send(jsonLine: String) throws {
+        stdinPipe.fileHandleForWriting.write(Data((jsonLine + "\n").utf8))
+    }
+
+    func stop() {
+        stdoutPipe.fileHandleForReading.readabilityHandler = nil
+        stderrPipe.fileHandleForReading.readabilityHandler = nil
+        try? stdinPipe.fileHandleForWriting.close()
+        if process.isRunning {
+            process.terminate()
+        }
+    }
+
+    private func append(_ data: Data, stdout: Bool) {
+        guard !data.isEmpty else { return }
+
+        let lock = stdout ? stdoutLock : stderrLock
+        lock.lock()
+        defer { lock.unlock() }
+
+        if stdout {
+            stdoutBuffer.append(data)
+            drainBuffer(&stdoutBuffer, eventFactory: CodexAppServerEvent.stdout)
+        } else {
+            stderrBuffer.append(data)
+            drainBuffer(&stderrBuffer, eventFactory: CodexAppServerEvent.stderr)
+        }
+    }
+
+    private func drainBuffer(_ buffer: inout Data, eventFactory: (String) -> CodexAppServerEvent) {
+        while let newlineIndex = buffer.firstIndex(of: 0x0A) {
+            let lineData = buffer.prefix(upTo: newlineIndex)
+            buffer.removeSubrange(...newlineIndex)
+            guard !lineData.isEmpty else { continue }
+            let line = String(decoding: lineData, as: UTF8.self)
+            continuation.yield(eventFactory(line))
+        }
+    }
+
+    private func flushBuffers() {
+        stdoutLock.lock()
+        if !stdoutBuffer.isEmpty {
+            continuation.yield(.stdout(String(decoding: stdoutBuffer, as: UTF8.self)))
+            stdoutBuffer.removeAll()
+        }
+        stdoutLock.unlock()
+
+        stderrLock.lock()
+        if !stderrBuffer.isEmpty {
+            continuation.yield(.stderr(String(decoding: stderrBuffer, as: UTF8.self)))
+            stderrBuffer.removeAll()
+        }
+        stderrLock.unlock()
+    }
+}
+
+actor CodexAppServerClient: CodexLiveStateProviding {
+    private let sessionFactory: any CodexAppServerSessionFactory
+    private let now: @Sendable () -> Date
+    private let sleep: @Sendable (TimeInterval) async -> Void
+    private let reconnectBackoff: [TimeInterval]
+
+    private var state: CodexLiveState
+    private var runTask: Task<Void, Never>?
+    private var currentSession: CodexAppServerSession?
+    private var continuations: [UUID: AsyncStream<CodexLiveState>.Continuation] = [:]
+    private var reconnectRequested = false
+
+    init(
+        sessionFactory: any CodexAppServerSessionFactory = SystemCodexAppServerSessionFactory(),
+        now: @escaping @Sendable () -> Date = Date.init,
+        sleep: @escaping @Sendable (TimeInterval) async -> Void = { interval in
+            let nanoseconds = UInt64(max(interval, 0) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+        },
+        reconnectBackoff: [TimeInterval] = [0, 2, 5, 10, 30]
+    ) {
+        self.sessionFactory = sessionFactory
+        self.now = now
+        self.sleep = sleep
+        self.reconnectBackoff = reconnectBackoff
+        self.state = CodexLiveState(
+            snapshot: nil,
+            identity: nil,
+            status: .connecting,
+            lastUpdateAt: nil,
+            lastErrorText: nil
+        )
+    }
+
+    func currentState() async -> CodexLiveState {
+        state
+    }
+
+    func updates() -> AsyncStream<CodexLiveState> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[id] = continuation
+            continuation.yield(state)
+            continuation.onTermination = { _ in
+                Task { await self.removeContinuation(id) }
+            }
+        }
+    }
+
+    func start() {
+        guard runTask == nil else { return }
+        runTask = Task { [weak self] in
+            await self?.runLoop()
+        }
+    }
+
+    func stop() {
+        runTask?.cancel()
+        runTask = nil
+        currentSession?.stop()
+        currentSession = nil
+    }
+
+    func requestImmediateRefresh() async {
+        start()
+        if let currentSession {
+            try? sendBootstrapRequests(on: currentSession)
+        } else {
+            reconnectRequested = true
+        }
+    }
+
+    private func runLoop() async {
+        var attempt = 0
+
+        while !Task.isCancelled {
+            let delay = reconnectRequested ? 0 : reconnectBackoff[min(attempt, reconnectBackoff.count - 1)]
+            reconnectRequested = false
+
+            if delay > 0 {
+                await sleep(delay)
+            }
+
+            if Task.isCancelled { break }
+
+            updateStatus(snapshot: state.snapshot, status: state.snapshot == nil ? .connecting : .staleFallback, error: state.lastErrorText)
+
+            do {
+                let session = try sessionFactory.makeSession()
+                currentSession = session
+                try sendBootstrapRequests(on: session)
+                try await consume(session: session)
+                attempt = 0
+            } catch is CancellationError {
+                break
+            } catch {
+                currentSession?.stop()
+                currentSession = nil
+                attempt += 1
+                updateStatus(
+                    snapshot: state.snapshot,
+                    status: state.snapshot == nil ? .error : .staleFallback,
+                    error: codexErrorText(error)
+                )
+            }
+        }
+    }
+
+    private func consume(session: CodexAppServerSession) async throws {
+        for await event in session.events {
+            try Task.checkCancellation()
+
+            switch event {
+            case let .stdout(line):
+                try await handleStdout(line)
+            case let .stderr(line):
+                await handleStderr(line)
+            case let .terminated(code):
+                throw ServiceProviderError.unavailable("Codex app-server terminated with status \(code).")
             }
         }
 
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            collector.append(handle.availableData, stdout: false)
+        throw ServiceProviderError.unavailable("Codex app-server stream ended unexpectedly.")
+    }
+
+    private func sendBootstrapRequests(on session: CodexAppServerSession) throws {
+        try session.send(jsonLine: Self.jsonLine([
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": [
+                "clientInfo": [
+                    "name": "UsageTool",
+                    "version": "1.0"
+                ],
+                "capabilities": NSNull()
+            ]
+        ]))
+
+        try session.send(jsonLine: Self.jsonLine([
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "account/read",
+            "params": [
+                "refreshToken": false
+            ]
+        ]))
+
+        try session.send(jsonLine: Self.jsonLine([
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "account/rateLimits/read",
+            "params": NSNull()
+        ]))
+    }
+
+    private func handleStdout(_ line: String) async throws {
+        guard let data = line.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data),
+              let object = payload as? [String: Any] else {
+            return
         }
 
-        process.terminationHandler = { _ in
-            completed.signal()
+        if let id = ProviderSupport.int(object["id"]),
+           let result = object["result"] as? [String: Any] {
+            if id == 2 {
+                state.identity = CodexAppServerPayloadParser.parseIdentity(from: result)
+                publish()
+                return
+            }
+
+            if id == 3,
+               let snapshot = CodexAppServerPayloadParser.parseSnapshot(rateLimitResult: result) {
+                state.snapshot = CodexConsumerSnapshot(
+                    windows: snapshot.windows,
+                    identity: state.identity ?? snapshot.identity,
+                    tier: snapshot.tier
+                )
+                state.status = .live
+                state.lastUpdateAt = now()
+                state.lastErrorText = nil
+                publish()
+            }
+            return
         }
 
-        try process.run()
-        stdinPipe.fileHandleForWriting.write(Data(input.utf8))
+        if let method = ProviderSupport.string(object["method"]),
+           let params = object["params"] as? [String: Any] {
+            switch method {
+            case "account/rateLimits/updated":
+                if let snapshot = CodexAppServerPayloadParser.parseSnapshot(notificationParams: params) {
+                    state.snapshot = CodexConsumerSnapshot(
+                        windows: snapshot.windows,
+                        identity: state.identity ?? snapshot.identity,
+                        tier: snapshot.tier
+                    )
+                    state.status = .live
+                    state.lastUpdateAt = now()
+                    state.lastErrorText = nil
+                    publish()
+                }
+            case "account/updated":
+                if let planType = ProviderSupport.string(params["planType"]),
+                   let snapshot = state.snapshot {
+                    state.snapshot = CodexConsumerSnapshot(
+                        windows: snapshot.windows,
+                        identity: snapshot.identity ?? state.identity,
+                        tier: planType.capitalized
+                    )
+                    publish()
+                }
+            default:
+                break
+            }
+        }
+    }
 
-        if rateLimitsReady.wait(timeout: .now() + timeout) == .timedOut {
-            try? stdinPipe.fileHandleForWriting.close()
-            process.terminate()
-            _ = completed.wait(timeout: .now() + 1)
-            stdoutPipe.fileHandleForReading.readabilityHandler = nil
-            stderrPipe.fileHandleForReading.readabilityHandler = nil
-            let stderrText = collector.flushRemainder().stderr
-            throw ServiceProviderError.unavailable(
-                stderrText.isEmpty
-                    ? "Codex app-server timed out while reading live rate limits."
-                    : stderrText.trimmingCharacters(in: .whitespacesAndNewlines)
-            )
+    private func handleStderr(_ line: String) async {
+        guard !line.isEmpty else { return }
+        if line.contains("failed to sync curated plugins repo") || line.contains("plugins::startup_sync") {
+            return
         }
 
-        try? stdinPipe.fileHandleForWriting.close()
-        process.terminate()
-        _ = completed.wait(timeout: .now() + 1)
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-        collector.append(stdoutPipe.fileHandleForReading.readDataToEndOfFile(), stdout: true)
-        collector.append(stderrPipe.fileHandleForReading.readDataToEndOfFile(), stdout: false)
-        let final = collector.flushRemainder()
+        state.lastErrorText = line
+        publish()
+    }
 
-        guard final.foundRateLimits else {
-            throw ServiceProviderError.unavailable("Codex app-server did not return live rate limits.")
+    private func updateStatus(snapshot: CodexConsumerSnapshot?, status: CodexConnectionStatus, error: String?) {
+        state.snapshot = snapshot
+        state.status = status
+        state.lastErrorText = error
+        publish()
+    }
+
+    private func publish() {
+        for continuation in continuations.values {
+            continuation.yield(state)
         }
+    }
 
-        return (final.stdout, final.stderr, process.terminationStatus)
+    private func removeContinuation(_ id: UUID) {
+        continuations.removeValue(forKey: id)
+    }
+
+    private func codexErrorText(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+
+    private static func jsonLine(_ object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return String(decoding: data, as: UTF8.self)
     }
 }
 

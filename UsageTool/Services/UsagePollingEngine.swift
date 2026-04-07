@@ -9,6 +9,7 @@ final class UsagePollingEngine {
         var errorMessage: String?
         var lastAttemptAt: Date?
         var lastSuccessAt: Date?
+        var connectionStatus: CodexConnectionStatus?
 
         var isStale: Bool {
             snapshot != nil && errorMessage != nil
@@ -19,6 +20,7 @@ final class UsagePollingEngine {
     private let keychainManager: KeychainManager
     private let snapshotCache: UsageSnapshotCache
     private let providers: [ServiceType: ServiceProvider]
+    private let codexClient: CodexAppServerClient
     private let sleep: @Sendable (TimeInterval) async -> Void
 
     var serviceRefreshIntervals: [ServiceType: TimeInterval]
@@ -27,17 +29,15 @@ final class UsagePollingEngine {
 
     @ObservationIgnored
     private var pollingTask: Task<Void, Never>?
+    @ObservationIgnored
+    private var codexUpdatesTask: Task<Void, Never>?
 
     init(
         accountStore: AccountStore,
         keychainManager: KeychainManager,
         snapshotCache: UsageSnapshotCache = UsageSnapshotCache(),
-        providers: [ServiceType: ServiceProvider] = [
-            .claude: AnthropicProvider(),
-            .codex: OpenAIProvider(),
-            .gemini: GeminiProvider(),
-            .antigravity: AntigravityProvider()
-        ],
+        codexClient: CodexAppServerClient = CodexAppServerClient(),
+        providers: [ServiceType: ServiceProvider]? = nil,
         serviceRefreshIntervals: [ServiceType: TimeInterval] = [
             .claude: 300,
             .codex: 5,
@@ -52,7 +52,13 @@ final class UsagePollingEngine {
         self.accountStore = accountStore
         self.keychainManager = keychainManager
         self.snapshotCache = snapshotCache
-        self.providers = providers
+        self.codexClient = codexClient
+        self.providers = providers ?? [
+            .claude: AnthropicProvider(),
+            .codex: OpenAIProvider(codexLiveStateProvider: codexClient),
+            .gemini: GeminiProvider(),
+            .antigravity: AntigravityProvider()
+        ]
         self.serviceRefreshIntervals = serviceRefreshIntervals
         self.sleep = sleep
         self.accountStates = UsagePollingEngine.initialAccountStates(
@@ -64,6 +70,7 @@ final class UsagePollingEngine {
 
     deinit {
         pollingTask?.cancel()
+        codexUpdatesTask?.cancel()
     }
 
     var snapshots: [UsageSnapshot] {
@@ -72,6 +79,15 @@ final class UsagePollingEngine {
 
     func start() {
         guard pollingTask == nil else { return }
+
+        codexUpdatesTask = Task { [weak self] in
+            guard let self else { return }
+            await self.codexClient.start()
+            let updates = await self.codexClient.updates()
+            for await state in updates {
+                await self.handleCodexLiveState(state)
+            }
+        }
 
         pollingTask = Task { [weak self] in
             guard let self else { return }
@@ -85,11 +101,17 @@ final class UsagePollingEngine {
     func stop() {
         pollingTask?.cancel()
         pollingTask = nil
+        codexUpdatesTask?.cancel()
+        codexUpdatesTask = nil
+        Task { await codexClient.stop() }
     }
 
     func refreshAll(force: Bool = true) async {
         guard !isRefreshing else { return }
         await synchronizeActiveConsumerAccounts()
+        if force {
+            await codexClient.requestImmediateRefresh()
+        }
 
         isRefreshing = true
         defer { isRefreshing = false }
@@ -134,6 +156,11 @@ final class UsagePollingEngine {
             return
         }
 
+        if usesSubscribedRefresh(account) {
+            await codexClient.requestImmediateRefresh()
+            return
+        }
+
         guard shouldPoll(account) else {
             return
         }
@@ -164,12 +191,14 @@ final class UsagePollingEngine {
             state.snapshot = snapshot.markingStale(false)
             state.errorMessage = nil
             state.lastSuccessAt = snapshot.timestamp
+            state.connectionStatus = nil
             try? snapshotCache.save(snapshot: snapshot)
         case let .failure(error):
             if let snapshot = state.snapshot {
                 state.snapshot = snapshot.markingStale(true)
             }
             state.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            state.connectionStatus = nil
         }
 
         updatedStates[accountID] = state
@@ -198,13 +227,17 @@ final class UsagePollingEngine {
         )
 
         for (serviceType, accounts) in consumerAccountsByService where accounts.count > 1 {
-            guard let detector = providers[serviceType] as? any ConsumerAccountDetecting else {
-                continue
+            let identity: ConsumerAccountIdentity?
+            if serviceType == .codex {
+                identity = await codexClient.currentState().identity
+            } else {
+                guard let detector = providers[serviceType] as? any ConsumerAccountDetecting else {
+                    continue
+                }
+                identity = try? await detector.currentConsumerIdentity()
             }
 
-            guard let identity = try? await detector.currentConsumerIdentity() else {
-                continue
-            }
+            guard let identity else { continue }
 
             guard let matchedAccount = matchingConsumerAccount(for: identity, in: accounts) else {
                 continue
@@ -237,11 +270,18 @@ final class UsagePollingEngine {
     }
 
     private func shouldPoll(_ account: Account) -> Bool {
+        if usesSubscribedRefresh(account) {
+            return false
+        }
         if account.planType == "consumer",
            accountStore.activeConsumerAccountID(for: account.serviceType) != account.id {
             return false
         }
         return true
+    }
+
+    private func usesSubscribedRefresh(_ account: Account) -> Bool {
+        account.serviceType == .codex && account.planType == "consumer"
     }
 
     private func shouldRefresh(_ account: Account) -> Bool {
@@ -292,5 +332,63 @@ final class UsagePollingEngine {
         _ = account
         _ = keychainManager
         return ""
+    }
+
+    private func handleCodexLiveState(_ liveState: CodexLiveState) async {
+        let codexAccounts = accountStore.accounts.filter {
+            $0.isEnabled && $0.serviceType == .codex && $0.planType == "consumer"
+        }
+
+        guard !codexAccounts.isEmpty else { return }
+
+        if codexAccounts.count > 1,
+           let identity = liveState.identity,
+           let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
+            if accountStore.activeConsumerAccountID(for: .codex) != matchedAccount.id {
+                try? accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
+            }
+
+            let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
+            if updatedAccount != matchedAccount {
+                try? accountStore.update(updatedAccount)
+            }
+        }
+
+        guard let activeAccountID = accountStore.activeConsumerAccountID(for: .codex),
+              let activeAccount = accountStore.accounts.first(where: { $0.id == activeAccountID }) else {
+            return
+        }
+
+        var updatedStates = accountStates
+        var state = updatedStates[activeAccountID] ?? AccountRefreshState()
+        state.connectionStatus = liveState.status
+        state.lastAttemptAt = Date()
+
+        if let liveSnapshot = liveState.snapshot {
+            let snapshot = UsageSnapshot(
+                accountId: activeAccount.id,
+                timestamp: liveState.lastUpdateAt ?? Date(),
+                windows: liveSnapshot.windows,
+                tier: liveSnapshot.tier,
+                breakdown: nil,
+                isStale: liveState.status != .live
+            )
+            state.snapshot = snapshot
+            state.lastSuccessAt = snapshot.timestamp
+            state.errorMessage = liveState.status == .error ? liveState.lastErrorText : nil
+            try? snapshotCache.save(snapshot: snapshot)
+        } else if let existingSnapshot = state.snapshot {
+            state.snapshot = existingSnapshot.markingStale(liveState.status != .live)
+            if liveState.status == .error {
+                state.errorMessage = liveState.lastErrorText
+            }
+        } else if liveState.status == .error {
+            state.errorMessage = liveState.lastErrorText ?? "Codex live usage is unavailable."
+        } else {
+            state.errorMessage = nil
+        }
+
+        updatedStates[activeAccountID] = state
+        accountStates = updatedStates
     }
 }
