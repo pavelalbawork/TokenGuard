@@ -1,0 +1,48 @@
+name: UsageTool
+options:
+  bundleIdPrefix: com.palba
+  deploymentTarget:
+    macOS: "14.0"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  UsageTool:
+    type: application
+    platform: macOS
+    sources:
+      - path: UsageTool
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.palba.UsageTool
+        PRODUCT_NAME: UsageTool
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: UsageTool
+        INFOPLIST_KEY_LSUIElement: YES
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_EMIT_LOC_STRINGS: NO
+  UsageToolTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/UsageToolTests
+    dependencies:
+      - target: UsageTool
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.palba.UsageToolTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: ""
+schemes:
+  UsageTool:
+    build:
+      targets:
+        UsageTool: all
+        UsageToolTests: [test]
+    test:
+      targets:
+        - UsageToolTests

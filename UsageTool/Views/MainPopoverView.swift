@@ -1,0 +1,624 @@
+import SwiftUI
+
+enum NavigationTab: String, CaseIterable {
+    case usage = "USAGE"
+    case limits = "LIMITS"
+    case history = "HISTORY"
+}
+
+struct MainPopoverView: View {
+    @Environment(AccountStore.self) private var accountStore
+    @Environment(\.openWindow) private var openWindow
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+    @Environment(ThemeManager.self) private var themeManager
+    
+    @State private var selectedTab: NavigationTab = .usage
+    @State private var showSettings = false // Drives inline settings display if clicked from header
+    @State private var isAddingAccount = false
+
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
+
+    var body: some View {
+        @Bindable var bindableThemeManager = themeManager
+        let theme = themeManager.currentTheme
+        
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Spacer()
+                
+                HStack(spacing: 16) {
+                    Button(action: {
+                        Task { await pollingEngine.refreshAll() }
+                    }) {
+                        if pollingEngine.isRefreshing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 14, weight: .light))
+                                .symbolRenderingMode(.hierarchical)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.primaryAccent)
+                    
+                    Menu {
+                        Picker("Theme", selection: $bindableThemeManager.selectedThemeId) {
+                            ForEach(Theme.all) { t in
+                                Text(t.name).tag(t.id)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "paintpalette")
+                            .font(.system(size: 14, weight: .light))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.primaryAccent)
+
+                    Button(action: {
+                        isAddingAccount = true
+                    }) {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 14, weight: .light))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.primaryAccent)
+                    
+                    Button(action: {
+                        withAnimation { showSettings.toggle() }
+                    }) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14, weight: .light))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.primaryAccent)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(theme.backgroundMain.opacity(0.8))
+            .background(.ultraThinMaterial)
+            .border(width: 1, edges: [.bottom], color: theme.border)
+            .zIndex(1)
+
+            // Main Content Area
+            if showSettings {
+                // Item 8: explicitly inject environments so SettingsView is safe if ever detached
+                ScrollView {
+                    SettingsView()
+                        .environment(accountStore)
+                        .environment(pollingEngine)
+                        .environment(themeManager)
+                        .padding(16)
+                }
+            } else {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        if !accountStore.accounts.isEmpty {
+                            GlobalUsageHeroView()
+                        }
+                        
+                        // Always show Nav Tabs at the top
+                        HStack {
+                            ForEach(NavigationTab.allCases, id: \.self) { tab in
+                                expandedNavButton(title: tab.rawValue, isSelected: selectedTab == tab, theme: theme) {
+                                    selectedTab = tab
+                                }
+                            }
+                        }
+                        .padding(4)
+                        .background(theme.surfaceContainerHigh.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
+                        
+                        // Router Content
+                        if isAddingAccount {
+                            InlineAddAccountView(
+                                onCancel: { isAddingAccount = false },
+                                onComplete: { 
+                                    isAddingAccount = false
+                                    selectedTab = .usage
+                                }
+                            )
+                        } else if selectedTab == .usage {
+                            if accountStore.accounts.isEmpty {
+                                Button(action: {
+                                    isAddingAccount = true
+                                }) {
+                                    VStack(spacing: 16) {
+                                        Image(systemName: "plus.circle")
+                                            .font(.system(size: 32, weight: .ultraLight))
+                                            .symbolRenderingMode(.hierarchical)
+                                        Text("No accounts configured yet. Click to add.")
+                                    }
+                                    .foregroundStyle(theme.textSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 40)
+                            } else {
+                                VStack(alignment: .leading, spacing: 24) {
+                                    let orderKeys = providerOrderStr.components(separatedBy: ",")
+                                    let sortedTypes = ServiceType.allCases.sorted { a, b in
+                                        let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
+                                        let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
+                                        return idxA < idxB
+                                    }
+                                    let serviceTypes = sortedTypes.filter { serviceType in
+                                        accountStore.accounts.contains { $0.serviceType == serviceType }
+                                    }
+                                    ForEach(serviceTypes, id: \.self) { serviceType in
+                                        ServiceSectionView(
+                                            serviceType: serviceType,
+                                            accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
+                                        )
+                                    }
+                                }
+                            }
+                        } else if selectedTab == .limits {
+                            LimitsView()
+                        } else if selectedTab == .history {
+                            HistoryView()
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            
+            // Footer — Item 2: remove dead links, Item 7: version from Bundle
+            HStack {
+                Text(appVersion)
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(2.0)
+                    .foregroundStyle(theme.textSecondary.opacity(0.6))
+                    .textCase(.uppercase)
+
+                Spacer()
+
+                Button(action: { isAddingAccount = true }) {
+                    Text("ADD ACCOUNT")
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(2.0)
+                        .foregroundStyle(theme.primaryAccent.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(theme.backgroundMain)
+            .border(width: 1, edges: [.top], color: theme.border)
+        }
+        .background(theme.backgroundMain)
+        .ignoresSafeArea()
+    }
+    
+    // Item 7: pull version from Bundle
+    private var appVersion: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "v\(v) (\(b))"
+    }
+
+    @ViewBuilder
+    private func expandedNavButton(title: String, isSelected: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(2.0)
+                .textCase(.uppercase)
+                .foregroundStyle(isSelected ? theme.tertiaryAccent : theme.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(isSelected ? theme.surfaceContainerHigh : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// Helper extension to draw borders on specific edges
+extension View {
+    func border(width: CGFloat, edges: [Edge], color: Color) -> some View {
+        overlay(EdgeBorder(width: width, edges: edges).foregroundColor(color))
+    }
+}
+
+struct EdgeBorder: Shape {
+    var width: CGFloat
+    var edges: [Edge]
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for edge in edges {
+            var x: CGFloat {
+                switch edge {
+                case .top, .bottom, .leading: return rect.minX
+                case .trailing: return rect.maxX - width
+                }
+            }
+            
+            var y: CGFloat {
+                switch edge {
+                case .top, .leading, .trailing: return rect.minY
+                case .bottom: return rect.maxY - width
+                }
+            }
+            
+            var w: CGFloat {
+                switch edge {
+                case .top, .bottom: return rect.width
+                case .leading, .trailing: return width
+                }
+            }
+            
+            var h: CGFloat {
+                switch edge {
+                case .top, .bottom: return width
+                case .leading, .trailing: return rect.height
+                }
+            }
+            path.addRect(CGRect(x: x, y: y, width: w, height: h))
+        }
+        return path
+    }
+}
+
+struct GlobalUsageHeroView: View {
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+    @Environment(ThemeManager.self) private var themeManager
+    
+    var body: some View {
+        let theme = themeManager.currentTheme
+        let totalProgress = calculateGlobalProgress()
+        
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SYSTEM NODE")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(2.5)
+                    .foregroundStyle(theme.secondaryAccent)
+                
+                // Item 1: show remaining, not used
+                Text("\(Int((1.0 - totalProgress) * 100))%")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(theme.textPrimary)
+                
+                Text("CAPACITY REMAINING")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(0.5)
+                    .foregroundStyle(theme.textSecondary)
+            }
+            
+            Spacer()
+            
+            ZStack {
+                RadialProgressRing(
+                    progress: totalProgress,
+                    color: theme.secondaryAccent,
+                    trackColor: theme.surfaceContainerHigh
+                )
+                .frame(width: 64, height: 64)
+                
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 24, weight: .light))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(theme.secondaryAccent)
+            }
+            .padding(4)
+        }
+        .padding(20)
+        .background(theme.surfaceContainerHigh.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(theme.border, lineWidth: 1)
+        )
+    }
+    
+    private func calculateGlobalProgress() -> Double {
+        var totalPercent = 0.0
+        var windowCount = 0
+        
+        for state in pollingEngine.accountStates.values {
+            guard let snapshot = state.snapshot else { continue }
+            for window in snapshot.windows {
+                if let percent = window.percentUsed {
+                    totalPercent += percent
+                    windowCount += 1
+                } else if let limit = window.limit, limit > 0 {
+                    totalPercent += (window.used / limit)
+                    windowCount += 1
+                }
+            }
+        }
+        
+        return windowCount > 0 ? (totalPercent / Double(windowCount)) : 0.0
+    }
+}
+
+struct RadialProgressRing: View {
+    var progress: Double // 0 to 1
+    var color: Color
+    var trackColor: Color
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(trackColor, lineWidth: 8)
+            
+            // Item 3: invert ring to show remaining (starts full, drains as usage grows)
+            RoundedRectangle(cornerRadius: 16)
+                .trim(from: 0, to: CGFloat(max(0, 1.0 - min(progress, 1.0))))
+                .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .shadow(color: color.opacity(0.8), radius: 6, x: 0, y: 0)
+        }
+    }
+}
+
+// MARK: - LIMITS VIEW FRONTEND
+
+struct LimitsView: View {
+    @Environment(AccountStore.self) private var accountStore
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+    @Environment(ThemeManager.self) private var themeManager
+
+    var body: some View {
+        let theme = themeManager.currentTheme
+
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            VStack(alignment: .leading, spacing: 4) {
+                Text("API CAPACITIES")
+                    .font(.system(size: 14, weight: .black))
+                    .tracking(1.0)
+                    .foregroundStyle(theme.textPrimary)
+                
+                Text("Maximum hard limits established by the providers.")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .padding(.horizontal, 16)
+            
+            // Capabilities List
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(filteredServices, id: \.self) { serviceType in
+                        let accounts = accountStore.accounts.filter { $0.serviceType == serviceType }
+                        if !accounts.isEmpty {
+                            providerLimitsCard(serviceType: serviceType, accounts: accounts, theme: theme)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+        }
+        .padding(.top, 16)
+    }
+
+    private var filteredServices: [ServiceType] {
+        ServiceType.allCases.filter { type in
+            accountStore.accounts.contains(where: { $0.serviceType == type })
+        }
+    }
+
+    @ViewBuilder
+    private func providerLimitsCard(serviceType: ServiceType, accounts: [Account], theme: Theme) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Provider Header
+            HStack(spacing: 6) {
+                Image(systemName: serviceType.iconName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(serviceType.tintColor(for: theme))
+                Text(serviceType.rawValue.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.5)
+                    .foregroundStyle(theme.textPrimary)
+                Spacer()
+            }
+            .padding(.bottom, 4)
+            
+            // Extracted Limits
+            ForEach(accounts) { account in
+                if let snapshot = pollingEngine.accountStates[account.id]?.snapshot {
+                    ForEach(snapshot.windows) { window in
+                        HStack {
+                            Text(window.label ?? window.windowType.defaultLabel)
+                                .font(.system(size: 9, weight: .bold))
+                                .textCase(.uppercase)
+                                .foregroundStyle(theme.textSecondary)
+                            
+                            Spacer()
+                            
+                            if let limit = window.limit {
+                                Text("\(IntegerFormatStyle<Int>().format(Int(limit)))\(window.unit.suffix)")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(theme.secondaryAccent)
+                            } else {
+                                Text("UNLIMITED")
+                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(theme.tertiaryAccent)
+                            }
+                        }
+                        .padding(8)
+                        .background(theme.surfaceContainerHigh.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                } else {
+                    Text("Fetching capacities for \(account.name)...")
+                        .font(.system(size: 9, weight: .light))
+                        .foregroundStyle(theme.textSecondary.opacity(0.5))
+                }
+            }
+        }
+        .padding(12)
+        .background(theme.surfaceContainerHigh.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(theme.border, lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - HISTORY VIEW FRONTEND
+
+struct HistoryView: View {
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+    @Environment(ThemeManager.self) private var themeManager
+    @Environment(AccountStore.self) private var accountStore
+
+    // Mock recent events based on active data and resets
+    private var simulatedEvents: [HistoryEvent] {
+        var events: [HistoryEvent] = []
+        for account in accountStore.accounts {
+            guard let state = pollingEngine.accountStates[account.id], let snapshot = state.snapshot else { continue }
+            
+            // Add a "Checked" event
+            events.append(HistoryEvent(
+                date: snapshot.timestamp,
+                title: "Usage snapshot captured",
+                accountName: account.name,
+                serviceType: account.serviceType,
+                type: .check
+            ))
+            
+            for window in snapshot.windows {
+                if let percent = window.percentUsed, percent < 0.20 {
+                    // Under 20% remaining
+                    events.append(HistoryEvent(
+                        date: snapshot.timestamp.addingTimeInterval(-3600), // fuzzy past
+                        title: "\(window.label ?? window.windowType.defaultLabel) approaching cap",
+                        accountName: account.name,
+                        serviceType: account.serviceType,
+                        type: .warning
+                    ))
+                }
+                
+                if let limit = window.limit, window.used >= limit {
+                    events.append(HistoryEvent(
+                        date: snapshot.timestamp.addingTimeInterval(-1200),
+                        title: "Hard limit reached",
+                        accountName: account.name,
+                        serviceType: account.serviceType,
+                        type: .critical
+                    ))
+                }
+            }
+        }
+        return events.sorted(by: { $0.date > $1.date }) // Newest first
+    }
+
+    var body: some View {
+        let theme = themeManager.currentTheme
+        let events = simulatedEvents
+
+        VStack(alignment: .leading, spacing: 20) {
+            // Header
+            VStack(alignment: .leading, spacing: 4) {
+                Text("EVENT LOG")
+                    .font(.system(size: 14, weight: .black))
+                    .tracking(1.0)
+                    .foregroundStyle(theme.textPrimary)
+                
+                Text("Recent capacity warnings and sync events.")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .padding(.horizontal, 16)
+            
+            if events.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 24, weight: .ultraLight))
+                        .foregroundStyle(theme.textSecondary.opacity(0.5))
+                    Text("No recent events")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(events) { event in
+                            HStack(alignment: .top, spacing: 12) {
+                                // Timeline indicator
+                                VStack(spacing: 0) {
+                                    Circle()
+                                        .fill(event.color(theme: theme))
+                                        .frame(width: 8, height: 8)
+                                        .padding(.top, 4)
+                                    
+                                    Rectangle()
+                                        .fill(theme.border)
+                                        .frame(width: 1)
+                                        .padding(.vertical, 4)
+                                }
+                                
+                                // Event Content
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Image(systemName: event.serviceType.iconName)
+                                            .font(.system(size: 9))
+                                            .foregroundStyle(event.serviceType.tintColor(for: theme))
+                                        
+                                        Text(event.accountName.uppercased())
+                                            .font(.system(size: 8, weight: .bold))
+                                            .foregroundStyle(theme.textSecondary)
+                                        
+                                        Spacer()
+                                        
+                                        Text(timeAgo(for: event.date))
+                                            .font(.system(size: 8, weight: .medium, design: .monospaced))
+                                            .foregroundStyle(theme.textSecondary.opacity(0.6))
+                                    }
+                                    
+                                    Text(event.title)
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(theme.textPrimary)
+                                }
+                                .padding(.bottom, 8)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+        .padding(.top, 16)
+    }
+    
+    private func timeAgo(for date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - Mock Data Models
+
+fileprivate struct HistoryEvent: Identifiable {
+    let id = UUID()
+    let date: Date
+    let title: String
+    let accountName: String
+    let serviceType: ServiceType
+    let type: EventType
+    
+    enum EventType {
+        case check
+        case warning
+        case critical
+    }
+    
+    func color(theme: Theme) -> Color {
+        switch type {
+        case .check: return theme.tertiaryAccent.opacity(0.6)
+        case .warning: return theme.secondaryAccent
+        case .critical: return theme.error
+        }
+    }
+}

@@ -1,0 +1,103 @@
+import SwiftUI
+
+struct AccountCardView: View {
+    let account: Account
+
+    @Environment(AccountStore.self) private var accountStore
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+    @Environment(ThemeManager.self) private var themeManager
+
+    var body: some View {
+        // Item 4: TimelineView auto-refreshes the "Updated X ago" label every 30s
+        TimelineView(.periodic(from: Date(), by: 30)) { context in
+            let state = pollingEngine.accountStates[account.id]
+            let theme = themeManager.currentTheme
+
+            VStack(alignment: .leading, spacing: 12) {
+                if let snapshot = state?.snapshot {
+                    VStack(spacing: 12) {
+                        ForEach(snapshot.windows) { window in
+                            UsageWindowRow(window: window)
+                        }
+                    }
+
+                    if snapshot.isStale {
+                        // Item 5: softer stale icon
+                        Label("Updated \(ageString(for: snapshot.timestamp, now: context.date))", systemImage: "clock.badge.exclamationmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .textCase(.uppercase)
+                            .foregroundStyle(theme.secondaryAccent.opacity(0.8))
+                    } else {
+                        Text("Updated \(ageString(for: snapshot.timestamp, now: context.date))")
+                            .font(.system(size: 8, weight: .bold))
+                            .textCase(.uppercase)
+                            .foregroundStyle(theme.textSecondary.opacity(0.5))
+                    }
+                } else if let errorMessage = state?.errorMessage {
+                    // Item 6 + 9: consistent font, Antigravity-aware copy
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(antigravityAwareError(errorMessage), systemImage: "exclamationmark.circle")
+                            .font(.system(size: 9, weight: .bold))
+                            .textCase(.uppercase)
+                            .foregroundStyle(theme.error.opacity(0.8))
+
+                        if account.serviceType == .antigravity {
+                            Text("Requires Antigravity Manager to be installed and running.")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundStyle(theme.textSecondary.opacity(0.6))
+                        }
+                    }
+                } else if isInactiveConsumerAccount {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Inactive saved account", systemImage: "pause.circle")
+                            .font(.system(size: 9, weight: .bold))
+                            .textCase(.uppercase)
+                            .foregroundStyle(theme.textSecondary.opacity(0.8))
+
+                        Text("Sign into this account in the local app or CLI to refresh it. The current LIVE account is updated automatically.")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(theme.textSecondary.opacity(0.7))
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading\u{2026}")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.surfaceContainerHigh.opacity(0.5))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(theme.border, lineWidth: 1)
+            )
+        }
+    }
+
+    // Item 4: accepts current time from TimelineView context so it stays live
+    private func ageString(for date: Date, now: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: now)
+    }
+
+    private var isInactiveConsumerAccount: Bool {
+        account.planType == "consumer" &&
+        accountStore.activeConsumerAccountID(for: account.serviceType) != account.id
+    }
+
+    // Item 9: strip noisy path info from Antigravity DB errors
+    private func antigravityAwareError(_ message: String) -> String {
+        guard account.serviceType == .antigravity else { return message }
+        if message.contains("database not found") { return "Antigravity DB not found" }
+        if message.contains("key file not found") { return "Antigravity key file missing" }
+        if message.contains("unexpected format") { return "Unsupported key format" }
+        return message
+    }
+}

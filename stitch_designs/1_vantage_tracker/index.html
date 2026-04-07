@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Command Center - Vantage Dark</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "on-secondary-fixed": "#1d1a2d",
+                  "on-secondary-fixed-variant": "#49455f",
+                  "tertiary": "#4edea3",
+                  "on-primary": "#2d0050",
+                  "on-tertiary-fixed": "#002113",
+                  "on-tertiary-container": "#bdffdb",
+                  "background": "#0d0a16",
+                  "primary-fixed": "#f0dbff",
+                  "on-error-container": "#ffdad6",
+                  "outline": "#948f99",
+                  "secondary-fixed-dim": "#cbc2db",
+                  "tertiary-container": "#005236",
+                  "surface-container-high": "#221d2d",
+                  "secondary-container": "#4a4458",
+                  "on-primary-fixed-variant": "#6b00b7",
+                  "tertiary-fixed-dim": "#4edea3",
+                  "primary-fixed-dim": "#e0b6ff",
+                  "surface-tint": "#e0b6ff",
+                  "surface-container-highest": "#2d2838",
+                  "surface": "#0d0a16",
+                  "inverse-surface": "#e7e0eb",
+                  "surface-container": "#1d1927",
+                  "secondary": "#cbc2db",
+                  "error": "#ffb4ab",
+                  "on-tertiary-fixed-variant": "#005236",
+                  "on-surface-variant": "#c9c4d0",
+                  "on-tertiary": "#003824",
+                  "on-secondary": "#332d41",
+                  "surface-bright": "#393444",
+                  "on-primary-container": "#f0dbff",
+                  "inverse-primary": "#9544d0",
+                  "on-secondary-container": "#e8def8",
+                  "surface-container-lowest": "#08060f",
+                  "secondary-fixed": "#e8def8",
+                  "error-container": "#93000a",
+                  "tertiary-fixed": "#6ffbbe",
+                  "on-primary-fixed": "#2d0050",
+                  "primary": "#e0b6ff",
+                  "surface-variant": "#49454f",
+                  "primary-container": "#7a1fa2",
+                  "on-surface": "#e7e0eb",
+                  "on-error": "#690005",
+                  "outline-variant": "#49454f",
+                  "on-background": "#e7e0eb",
+                  "surface-dim": "#0d0a16",
+                  "surface-container-low": "#15111e",
+                  "inverse-on-surface": "#322f37"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.125rem",
+                  "lg": "0.25rem",
+                  "xl": "0.5rem",
+                  "full": "0.75rem"
+          },
+          "fontFamily": {
+                  "headline": ["Inter"],
+                  "body": ["Inter"],
+                  "label": ["Inter"]
+          }
+        },
+      },
+    }
+  </script>
+<style>    body { font-family: 'Inter', sans-serif; background-color: #0d0a16; color: #e7e0eb; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .glass-panel { backdrop-filter: blur(20px); background: rgba(21, 17, 30, 0.8); }
+    .radial-usage { background: conic-gradient(#4edea3 var(--progress), #2d2838 0deg); }
+    .bg-vibrant-purple { background-color: #A855F7; }
+    .text-vibrant-purple { color: #A855F7; }
+    .shadow-purple { shadow: 0 0 8px rgba(168, 85, 247, 0.4); }</style>
+</head>
+<body class="w-[360px] h-fit overflow-hidden border border-white/5 shadow-2xl">
+<!-- TopAppBar -->
+<header class="bg-[#0d0a16]/80 backdrop-blur-xl flex justify-between items-center px-4 py-3 w-full sticky top-0 z-50 border-b border-white/5">
+<div class="flex items-center gap-2">
+<span class="text-sm font-bold tracking-tight text-primary">AI Nexus</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="hover:bg-surface-container-highest transition-colors duration-200 p-1.5 rounded-full active:scale-95">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="refresh">refresh</span>
+</button>
+<button class="hover:bg-surface-container-highest transition-colors duration-200 p-1.5 rounded-full active:scale-95">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<main class="p-4 space-y-6">
+<!-- Hero Summary Section -->
+<section class="bg-surface-container-low rounded-xl p-5 flex items-center justify-between shadow-inner border border-white/5">
+<div class="space-y-1">
+<span class="text-[0.6875rem] tracking-widest uppercase font-semibold text-tertiary">GLOBAL USAGE</span>
+<h1 class="text-4xl font-extrabold tracking-tighter text-on-primary-container leading-none">82%</h1>
+<p class="text-[0.6875rem] text-on-surface-variant font-medium">1.2M / 1.5M TOKENS</p>
+</div>
+<div class="relative w-16 h-16 rounded-2xl flex items-center justify-center radial-usage shadow-lg" style="--progress: 295deg;">
+<div class="absolute inset-1.5 bg-surface-container-low rounded-xl"></div>
+<span class="relative material-symbols-outlined text-tertiary" data-icon="bolt">bolt</span>
+</div>
+</section>
+<!-- Navigation Tabs -->
+<nav class="flex justify-between items-center bg-surface-container-lowest p-1 rounded-lg border border-white/5">
+<div class="flex-1 text-center py-1.5 rounded-md text-[0.6875rem] font-bold tracking-widest uppercase text-tertiary bg-surface-container-highest">Usage</div>
+<div class="flex-1 text-center py-1.5 rounded-md text-[0.6875rem] font-bold tracking-widest uppercase text-outline hover:text-primary transition-colors cursor-pointer">Limits</div>
+<div class="flex-1 text-center py-1.5 rounded-md text-[0.6875rem] font-bold tracking-widest uppercase text-outline hover:text-primary transition-colors cursor-pointer">History</div>
+<div class="flex-1 text-center py-1.5 rounded-md text-[0.6875rem] font-bold tracking-widest uppercase text-outline hover:text-primary transition-colors cursor-pointer">Settings</div>
+</nav>
+<!-- Providers List -->
+<div class="space-y-6">
+<!-- Codex -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="terminal">terminal</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">Codex</span>
+</div>
+<button class="text-outline hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[14px]" data-icon="switch_account">switch_account</span>
+</button>
+</div>
+<div class="space-y-3 bg-surface-container-low/50 p-3 rounded-xl border border-white/5">
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-outline uppercase tracking-wider">
+<span>5H Window</span>
+<span class="text-tertiary">42/100</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[42%] rounded-full shadow-[0_0_8px_rgba(78,222,163,0.3)]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-outline uppercase tracking-wider">
+<span>Weekly Rolling</span>
+<span class="">850/1000</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[85%] rounded-full shadow-[0_0_8px_rgba(224,182,255,0.3)]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Claude -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="psychology">psychology</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">Claude</span>
+</div>
+<button class="text-outline hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[14px]" data-icon="switch_account">switch_account</span>
+</button>
+</div>
+<div class="space-y-3 bg-surface-container-low/50 p-3 rounded-xl border border-white/5">
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-outline uppercase tracking-wider">
+<span>5H Window</span>
+<span class="text-tertiary">12/50</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[24%] rounded-full shadow-[0_0_8px_rgba(78,222,163,0.3)]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-outline uppercase tracking-wider">
+<span>Weekly Rolling</span>
+<span class="text-tertiary">180/400</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[45%] rounded-full shadow-[0_0_8px_rgba(224,182,255,0.3)]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Antigravity (AG) -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="rocket_launch">rocket_launch</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">Antigravity (AG)</span>
+</div>
+<button class="text-outline hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[14px]" data-icon="switch_account">switch_account</span>
+</button>
+</div>
+<div class="grid grid-cols-1 gap-5 pl-4 border-l-2 border-primary/20">
+<!-- AG Claude -->
+<div class="space-y-2">
+<span class="text-[10px] font-bold text-secondary tracking-tight">Claude (AG)</span>
+<div class="flex gap-3">
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-tertiary w-[15%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">5h</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary w-[30%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">Weekly</div>
+</div>
+</div>
+</div>
+<!-- AG Gemini Pro -->
+<div class="space-y-2">
+<span class="text-[10px] font-bold text-secondary tracking-tight">Gemini Pro (AG)</span>
+<div class="flex gap-3">
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-tertiary w-[65%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">5h</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary w-[92%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">Weekly</div>
+</div>
+</div>
+</div>
+<!-- AG Gemini Flash -->
+<div class="space-y-2">
+<span class="text-[10px] font-bold text-secondary tracking-tight">Gemini Flash (AG)</span>
+<div class="flex gap-3">
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-tertiary w-[10%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">5h</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary w-[12%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">Weekly</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Gemini -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="star">star</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">Gemini</span>
+</div>
+<button class="text-outline hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[14px]" data-icon="switch_account">switch_account</span>
+</button>
+</div>
+<div class="grid grid-cols-1 gap-5 pl-4 border-l-2 border-primary/20">
+<!-- Gemini Pro -->
+<div class="space-y-2">
+<span class="text-[10px] font-bold text-secondary tracking-tight">Gemini Pro</span>
+<div class="flex gap-3">
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-tertiary w-[78%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">5h</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary w-[45%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">Weekly</div>
+</div>
+</div>
+</div>
+<!-- Gemini Flash -->
+<div class="space-y-2">
+<span class="text-[10px] font-bold text-secondary tracking-tight">Gemini Flash</span>
+<div class="flex gap-3">
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-tertiary w-[12%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">5h</div>
+</div>
+<div class="flex-1 space-y-1">
+<div class="h-1 bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary w-[22%]"></div></div>
+<div class="text-[7px] font-bold text-outline text-right uppercase">Weekly</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest flex flex-row justify-between items-center px-4 py-3 w-full mt-auto border-t border-white/5">
+<div class="text-[9px] tracking-widest uppercase font-bold text-outline/60">v1.0.4 obsidian-command</div>
+<div class="flex gap-4">
+<a class="text-[9px] tracking-widest uppercase font-bold text-outline/60 hover:text-primary transition-colors" href="#">Account</a>
+<a class="text-[9px] tracking-widest uppercase font-bold text-outline/60 hover:text-primary transition-colors" href="#">Support</a>
+</div>
+</footer>
+</body></html>

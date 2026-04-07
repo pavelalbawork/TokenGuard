@@ -1,0 +1,324 @@
+<html class="dark"><head>
+<meta charset="utf-8"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+                  "inverse-surface": "#e0f2fe",
+                  "surface-dim": "#080e1a",
+                  "outline": "#7dd3fc",
+                  "surface-container-high": "#1e293b",
+                  "on-tertiary": "#000000",
+                  "secondary-fixed-dim": "#bae6fd",
+                  "on-primary-container": "#082f49",
+                  "surface-container": "#0f172a",
+                  "inverse-primary": "#0ea5e9",
+                  "surface": "#080e1a",
+                  "surface-bright": "#334155",
+                  "on-secondary-fixed": "#0c4a6e",
+                  "on-error-container": "#ffdad6",
+                  "tertiary-fixed": "#7dd3fc",
+                  "tertiary": "#38bdf8",
+                  "tertiary-fixed-dim": "#0ea5e9",
+                  "surface-container-highest": "#334155",
+                  "on-tertiary-fixed-variant": "#0c4a6e",
+                  "inverse-on-surface": "#0f172a",
+                  "on-surface": "#f0f9ff",
+                  "secondary-fixed": "#e0f2fe",
+                  "on-secondary-container": "#bae6fd",
+                  "error": "#ff5252",
+                  "primary": "#00d4ff",
+                  "primary-container": "#7dd3fc",
+                  "on-primary": "#000000",
+                  "tertiary-container": "#0369a1",
+                  "background": "#080e1a",
+                  "on-surface-variant": "#bae6fd",
+                  "on-primary-fixed": "#0c4a6e",
+                  "on-primary-fixed-variant": "#075985",
+                  "secondary": "#7dd3fc",
+                  "on-tertiary-fixed": "#0c4a6e",
+                  "on-background": "#f0f9ff",
+                  "error-container": "#850000",
+                  "secondary-container": "#0c4a6e",
+                  "on-error": "#ffffff",
+                  "on-secondary": "#0c4a6e",
+                  "surface-container-lowest": "#020617",
+                  "primary-fixed": "#e0f2fe",
+                  "surface-tint": "#00d4ff",
+                  "primary-fixed-dim": "#00d4ff",
+                  "outline-variant": "#334155",
+                  "surface-container-low": "#0f172a",
+                  "on-tertiary-container": "#e0f2fe",
+                  "on-secondary-fixed-variant": "#075985"
+          },
+          "borderRadius": {
+                  "DEFAULT": "0.25rem",
+                  "lg": "0.5rem",
+                  "xl": "0.75rem",
+                  "full": "9999px"
+          },
+          "fontFamily": {
+                  "headline": ["Inter"],
+                  "body": ["Inter"],
+                  "label": ["Inter"]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body { font-family: 'Inter', sans-serif; background-color: #080e1a; color: #f0f9ff; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .frost-glow { box-shadow: 0 0 15px rgba(0, 212, 255, 0.3); }
+    .radial-usage { background: conic-gradient(#00d4ff var(--progress), #334155 0deg); }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #020617; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 overflow-hidden">
+<!-- Mac Menu Bar Style Container (360px) -->
+<main class="w-[360px] h-[720px] bg-surface rounded-xl overflow-hidden flex flex-col shadow-[0_20px_60px_rgba(0,212,255,0.15)] border border-white/10">
+<!-- TopNavBar -->
+<header class="bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 py-3 w-full sticky top-0 z-50 border-b border-white/5">
+<div class="flex items-center gap-2">
+<span class="text-sm font-bold tracking-tight text-primary">FrostScale AI</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="hover:bg-surface-container-highest transition-colors p-1 rounded-full text-primary">
+<span class="material-symbols-outlined text-lg">sync</span>
+</button>
+<button class="hover:bg-surface-container-highest transition-colors p-1 rounded-full text-primary">
+<span class="material-symbols-outlined text-lg">settings</span>
+</button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto px-4 pt-4 pb-8 space-y-6">
+<!-- Hero Summary Section -->
+<section class="bg-surface-container-low rounded-xl p-5 flex items-center justify-between shadow-inner border border-white/5">
+<div class="space-y-1">
+<span class="text-[10px] tracking-widest uppercase font-bold text-primary">GLOBAL USAGE</span>
+<h1 class="text-4xl font-black tracking-tighter text-on-surface leading-none">82%</h1>
+<p class="text-[10px] text-on-surface-variant font-medium">8.2k / 10.0k DAILY</p>
+</div>
+<div class="relative w-16 h-16 rounded-full flex items-center justify-center radial-usage" style="--progress: 295deg;">
+<div class="absolute inset-[3px] bg-surface-container-low rounded-full"></div>
+<span class="relative material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">bolt</span>
+</div>
+</section>
+<!-- Tab Navigation -->
+<nav class="flex justify-between items-center bg-surface-container-lowest p-1 rounded-lg border border-white/5">
+<div class="flex-1 text-center py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase text-primary bg-surface-container-highest/60">Usage</div>
+<div class="flex-1 text-center py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase text-on-surface-variant/40 hover:text-primary transition-colors">Limits</div>
+<div class="flex-1 text-center py-1.5 rounded-md text-[10px] font-bold tracking-widest uppercase text-on-surface-variant/40 hover:text-primary transition-colors">History</div>
+</nav>
+<!-- Providers List -->
+<div class="space-y-6">
+<!-- 1. Codex -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">terminal</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">Codex</span>
+</div>
+<button class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined text-[12px] text-primary" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+<span class="text-[8px] font-bold text-primary tracking-tighter">MAIN</span>
+</button>
+</div>
+<div class="space-y-3 bg-surface-container-low/50 p-3 rounded-lg border border-white/5">
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-on-surface-variant">
+<span>5H WINDOW</span>
+<span>14/20</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[70%] rounded-full shadow-[0_0_8px_rgba(0,212,255,0.4)]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-on-surface-variant/60">
+<span>WEEKLY ROLLING</span>
+<span>420/500</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[84%] rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- 2. Claude -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">psychology</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">Claude</span>
+</div>
+<button class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-highest/50 border border-white/10 hover:border-primary/40 transition-all">
+<span class="material-symbols-outlined text-[12px] text-on-surface-variant/60" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+<span class="text-[8px] font-bold text-on-surface-variant/60 tracking-tighter">ALT_02</span>
+</button>
+</div>
+<div class="space-y-3 bg-surface-container-low/50 p-3 rounded-lg border border-white/5">
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-on-surface-variant">
+<span>5H WINDOW</span>
+<span>2/10</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[20%] rounded-full shadow-[0_0_8px_rgba(0,212,255,0.4)]"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-[9px] font-bold text-on-surface-variant/60">
+<span>WEEKLY ROLLING</span>
+<span>128/200</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[64%] rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- 3. Antigravity (Multi-model) -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">auto_awesome</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">Antigravity (AG)</span>
+</div>
+<button class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined text-[12px] text-primary" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+<span class="text-[8px] font-bold text-primary tracking-tighter">CORP</span>
+</button>
+</div>
+<div class="space-y-5 bg-surface-container-low/50 p-3 rounded-lg border border-white/5">
+<!-- AG Claude -->
+<div class="space-y-2">
+<span class="text-[9px] font-bold text-primary">Claude 3.5 Sonnet</span>
+<div class="space-y-1">
+<div class="flex gap-2">
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="5h (45%)">
+<div class="h-full bg-primary w-[45%]"></div>
+</div>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="Weekly (60%)">
+<div class="h-full bg-secondary w-[60%]"></div>
+</div>
+</div>
+<div class="flex justify-between text-[7px] font-bold text-on-surface-variant/40">
+<span>5H: 9/20</span>
+<span>W: 120/200</span>
+</div>
+</div>
+</div>
+<!-- AG Gemini Pro -->
+<div class="space-y-2">
+<span class="text-[9px] font-bold text-primary">Gemini 1.5 Pro</span>
+<div class="space-y-1">
+<div class="flex gap-2">
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="5h (22%)">
+<div class="h-full bg-primary w-[22%]"></div>
+</div>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="Weekly (40%)">
+<div class="h-full bg-secondary w-[40%]"></div>
+</div>
+</div>
+<div class="flex justify-between text-[7px] font-bold text-on-surface-variant/40">
+<span>5H: 11/50</span>
+<span>W: 80/200</span>
+</div>
+</div>
+</div>
+<!-- AG Gemini Flash -->
+<div class="space-y-2">
+<span class="text-[9px] font-bold text-primary">Gemini 1.5 Flash</span>
+<div class="space-y-1">
+<div class="flex gap-2">
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="5h (98%)">
+<div class="h-full bg-error w-[98%]"></div>
+</div>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden" title="Weekly (99%)">
+<div class="h-full bg-error/50 w-[99%]"></div>
+</div>
+</div>
+<div class="flex justify-between text-[7px] font-bold text-error/60">
+<span>5H: 49/50</span>
+<span>W: 495/500</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Gemini -->
+<div class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">flare</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface">Gemini</span>
+</div>
+<button class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-container-highest/50 border border-white/10 hover:border-primary/40 transition-all">
+<span class="material-symbols-outlined text-[12px] text-on-surface-variant/60" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+<span class="text-[8px] font-bold text-on-surface-variant/60 tracking-tighter">FREE_TIER</span>
+</button>
+</div>
+<div class="space-y-5 bg-surface-container-low/50 p-3 rounded-lg border border-white/5">
+<!-- Gemini Pro -->
+<div class="space-y-2">
+<span class="text-[9px] font-bold text-primary">Gemini Pro</span>
+<div class="space-y-1">
+<div class="flex gap-2">
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[36%]"></div>
+</div>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[55%]"></div>
+</div>
+</div>
+<div class="flex justify-between text-[7px] font-bold text-on-surface-variant/40">
+<span>5H: 18/50</span>
+<span>W: 110/200</span>
+</div>
+</div>
+</div>
+<!-- Gemini Flash -->
+<div class="space-y-2">
+<span class="text-[9px] font-bold text-primary">Gemini Flash</span>
+<div class="space-y-1">
+<div class="flex gap-2">
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[48%]"></div>
+</div>
+<div class="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[70%]"></div>
+</div>
+</div>
+<div class="flex justify-between text-[7px] font-bold text-on-surface-variant/40">
+<span>5H: 24/50</span>
+<span>W: 350/500</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Action Footer -->
+<div class="p-4 bg-surface-container-low border-t border-white/10">
+<button class="w-full bg-primary text-on-primary py-3 rounded-md font-black text-[10px] uppercase tracking-[0.2em] hover:brightness-110 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">bolt</span>
+        Optimize Providers
+</button>
+</div>
+<!-- Decorative Footer -->
+<div class="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+</main>
+<!-- Background Effects -->
+<div class="fixed top-0 left-0 w-full h-full -z-10 bg-[#020617]"></div>
+<div class="fixed -top-24 -left-24 w-96 h-96 bg-primary/10 blur-[120px] rounded-full -z-10"></div>
+<div class="fixed -bottom-24 -right-24 w-96 h-96 bg-primary/10 blur-[120px] rounded-full -z-10"></div>
+</body></html>
