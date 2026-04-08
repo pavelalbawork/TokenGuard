@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 private final class LockedBox<Value>: @unchecked Sendable {
     private let lock = NSLock()

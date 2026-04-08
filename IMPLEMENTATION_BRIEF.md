@@ -1,4 +1,4 @@
-# UsageTool — Implementation Brief (v2)
+# TokenGuard — Implementation Brief (v2)
 
 > Native SwiftUI Mac menu bar app showing usage, limits, and reset timing for AI subscriptions with multi-account support.
 
@@ -135,7 +135,7 @@ protocol CLIParser {
 ### Main popover
 ```
 +---------------------------------------+
-| UsageTool                    ↻   ⚙️   |
+| TokenGuard                    ↻   ⚙️   |
 +---------------------------------------+
 | ▼ CLAUDE                              |
 |   Personal Pro                        |
@@ -177,10 +177,10 @@ Each card shows N `UsageWindow` rows:
 Consolidate into single Xcode project. Remove root-level duplicate files.
 
 ```
-UsageTool/
-├── UsageTool.xcodeproj/
-├── UsageTool/
-│   ├── UsageToolApp.swift
+TokenGuard/
+├── TokenGuard.xcodeproj/
+├── TokenGuard/
+│   ├── TokenGuardApp.swift
 │   ├── Models/
 │   │   ├── Account.swift           # Keep existing
 │   │   ├── UsageSnapshot.swift     # Rework: UsageWindow model
@@ -213,7 +213,7 @@ UsageTool/
 │   └── Resources/
 │       └── Assets.xcassets
 └── Tests/
-    └── UsageToolTests/
+    └── TokenGuardTests/
         ├── ProviderTests.swift     # Update fixtures for multi-window
         ├── CLIParserTests.swift    # New
         ├── KeychainManagerTests.swift
@@ -235,7 +235,7 @@ UsageTool/
 8. Update tests
 
 ### Phase 2: Frontend (Antigravity)
-1. `UsageToolApp` with `MenuBarExtra` and dynamic status icon
+1. `TokenGuardApp` with `MenuBarExtra` and dynamic status icon
 2. `MainPopoverView` with manual refresh button
 3. `AccountCardView` showing multiple `UsageWindowRow`s per account
 4. `UsageWindowRow` — progress bar (if limit known) OR raw number + "Set limit"

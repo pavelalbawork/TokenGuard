@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct UsageToolApp: App {
+struct TokenGuardApp: App {
     @State private var accountStore: AccountStore
     @State private var keychainManager: KeychainManager
     @State private var pollingEngine: UsagePollingEngine

@@ -99,7 +99,7 @@ None of the four providers expose "your plan's hard limit" through their APIs. T
 Consumer plans use rolling 5-hour windows with weekly caps. The code assumes monthly resets. This is fundamentally wrong for the target user and needs to be re-architected.
 
 ### 3. Two File Trees Exist
-There are duplicate structures at `/UsageTool/Models/` (root) and `/UsageTool/UsageTool/Models/` (Xcode project). Needs consolidation.
+There are duplicate structures at `/TokenGuard/Models/` (root) and `/TokenGuard/TokenGuard/Models/` (Xcode project). Needs consolidation.
 
 ### 4. Package.swift vs Xcode Project
 Package.swift defines a library target with app code excluded. This should ultimately be a proper Xcode project with an app target. The SPM approach works for backend-only testing but won't produce a runnable .app.

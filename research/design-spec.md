@@ -1,4 +1,4 @@
-# UsageTool Design Exploration
+# TokenGuard Design Exploration
 
 > Status: exploration. This file separates stable design principles from speculative ideas.
 
@@ -6,7 +6,7 @@ The previous version mixed solid menu bar guidance with overly specific UI conce
 
 ## Design Goal
 
-UsageTool should feel like a lightweight native macOS utility that answers one question quickly:
+TokenGuard should feel like a lightweight native macOS utility that answers one question quickly:
 
 > “How close am I to limits or resets across my AI tools and accounts?”
 
@@ -35,7 +35,7 @@ This remains the strongest candidate for V1.
 
 ```text
 +---------------------------------------+
-| UsageTool                       ⚙     |
+| TokenGuard                       ⚙     |
 +---------------------------------------+
 | ▼ Claude                              |
 |   Personal Pro                        |

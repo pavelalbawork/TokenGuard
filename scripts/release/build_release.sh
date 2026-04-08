@@ -3,10 +3,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-PROJECT_PATH="$ROOT_DIR/UsageTool.xcodeproj"
-SCHEME="UsageTool"
+PROJECT_PATH="$ROOT_DIR/TokenGuard.xcodeproj"
+SCHEME="TokenGuard"
 CONFIGURATION="${CONFIGURATION:-Release}"
-PRODUCT_NAME="UsageTool"
+PRODUCT_NAME="TokenGuard"
 DIST_DIR="${DIST_DIR:-$ROOT_DIR/dist}"
 ARCHIVE_PATH="$DIST_DIR/$PRODUCT_NAME.xcarchive"
 STAGING_DIR="$DIST_DIR/staging"

@@ -21,8 +21,8 @@ swift test --filter CLIParserTests   # run one test class
 Full app build requires Xcode:
 
 ```bash
-xcodebuild build -scheme UsageTool
-xcodebuild test -scheme UsageTool -destination 'platform=macOS'
+xcodebuild build -scheme TokenGuard
+xcodebuild test -scheme TokenGuard -destination 'platform=macOS'
 ```
 
 ## Swift 6 Concurrency
@@ -46,13 +46,13 @@ Polling engine fetches usage from providers on a timer → stores `UsageSnapshot
 
 **CLI Parsers** extract limits from local CLI output (`claude /usage`, `codex /status`) as best-effort. Falls back to manually configured limits. No progress bar when limit is unknown (by design).
 
-**Storage:** Accounts persist as JSON in `~/Library/Application Support/UsageTool/`. Credentials in Keychain only, never disk.
+**Storage:** Accounts persist as JSON in `~/Library/Application Support/TokenGuard/`. Credentials in Keychain only, never disk.
 
 **Menu bar icon** color reflects worst usage ratio: gray → orange (≥75%) → red (≥95%).
 
 ## Testing Patterns
 
-All external dependencies are protocol-injected. See `Tests/UsageToolTests/TestSupport.swift` for the full set of mocks:
+All external dependencies are protocol-injected. See `Tests/TokenGuardTests/TestSupport.swift` for the full set of mocks:
 
 - **Network:** `URLProtocolMock` + `makeMockedSession()` — set `URLProtocolMock.requestHandler` to stub HTTP responses
 - **Keychain:** `InMemoryKeychainBackingStore` — in-memory replacement, thread-safe with `NSLock`

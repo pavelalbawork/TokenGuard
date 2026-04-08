@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "8C1E224DD98A124179C0F6C2"
-               BuildableName = "UsageTool.app"
-               BlueprintName = "UsageTool"
-               ReferencedContainer = "container:UsageTool.xcodeproj">
+               BlueprintIdentifier = "99837A967FC5063BA3D59D1B"
+               BuildableName = "TokenGuard.app"
+               BlueprintName = "TokenGuard"
+               ReferencedContainer = "container:TokenGuard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -29,10 +29,10 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "F7C2F913A4CCAA97D37EBA76"
-               BuildableName = "UsageToolTests.xctest"
-               BlueprintName = "UsageToolTests"
-               ReferencedContainer = "container:UsageTool.xcodeproj">
+               BlueprintIdentifier = "B4EED7BDA3E4784DE8EDBE8F"
+               BuildableName = "TokenGuardTests.xctest"
+               BlueprintName = "TokenGuardTests"
+               ReferencedContainer = "container:TokenGuard.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,10 +46,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8C1E224DD98A124179C0F6C2"
-            BuildableName = "UsageTool.app"
-            BlueprintName = "UsageTool"
-            ReferencedContainer = "container:UsageTool.xcodeproj">
+            BlueprintIdentifier = "99837A967FC5063BA3D59D1B"
+            BuildableName = "TokenGuard.app"
+            BlueprintName = "TokenGuard"
+            ReferencedContainer = "container:TokenGuard.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -58,10 +58,10 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "F7C2F913A4CCAA97D37EBA76"
-               BuildableName = "UsageToolTests.xctest"
-               BlueprintName = "UsageToolTests"
-               ReferencedContainer = "container:UsageTool.xcodeproj">
+               BlueprintIdentifier = "B4EED7BDA3E4784DE8EDBE8F"
+               BuildableName = "TokenGuardTests.xctest"
+               BlueprintName = "TokenGuardTests"
+               ReferencedContainer = "container:TokenGuard.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -82,10 +82,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8C1E224DD98A124179C0F6C2"
-            BuildableName = "UsageTool.app"
-            BlueprintName = "UsageTool"
-            ReferencedContainer = "container:UsageTool.xcodeproj">
+            BlueprintIdentifier = "99837A967FC5063BA3D59D1B"
+            BuildableName = "TokenGuard.app"
+            BlueprintName = "TokenGuard"
+            ReferencedContainer = "container:TokenGuard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -99,10 +99,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "8C1E224DD98A124179C0F6C2"
-            BuildableName = "UsageTool.app"
-            BlueprintName = "UsageTool"
-            ReferencedContainer = "container:UsageTool.xcodeproj">
+            BlueprintIdentifier = "99837A967FC5063BA3D59D1B"
+            BuildableName = "TokenGuard.app"
+            BlueprintName = "TokenGuard"
+            ReferencedContainer = "container:TokenGuard.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

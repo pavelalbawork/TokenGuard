@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 final class CodexSessionSnapshotReaderTests: XCTestCase {
     func testUsesNewestTokenCountEventAcrossAllSessionFiles() throws {

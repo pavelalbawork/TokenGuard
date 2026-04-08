@@ -129,7 +129,7 @@ final class OAuthLoopbackServer: @unchecked Sendable {
     
     private func respond(to connection: NWConnection, success: Bool, completion: @escaping @Sendable () -> Void) {
         let title = success ? "Authorization Successful" : "Authorization Failed"
-        let subtitle = success ? "You can safely close this tab and return to UsageTool." : "An error occurred during authentication."
+        let subtitle = success ? "You can safely close this tab and return to TokenGuard." : "An error occurred during authentication."
         let html = """
         <!DOCTYPE html>
         <html>

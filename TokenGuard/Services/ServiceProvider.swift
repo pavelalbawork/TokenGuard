@@ -467,7 +467,7 @@ actor CodexAppServerClient: CodexLiveStateProviding {
             "method": "initialize",
             "params": [
                 "clientInfo": [
-                    "name": "UsageTool",
+                    "name": "TokenGuard",
                     "version": "1.0"
                 ],
                 "capabilities": NSNull()

@@ -1,6 +1,9 @@
 import Foundation
 
 struct UsageSnapshotCache {
+    private static let storageDirectoryName = "TokenGuard"
+    private static let legacyStorageDirectoryName = "UsageTool"
+
     private let storageURL: URL
     private let fileManager: FileManager
     private let encoder: JSONEncoder
@@ -68,8 +71,30 @@ struct UsageSnapshotCache {
     private static func defaultStorageURL(fileManager: FileManager) -> URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        return appSupport
-            .appendingPathComponent("UsageTool", isDirectory: true)
+        let storageDirectory = appSupport.appendingPathComponent(storageDirectoryName, isDirectory: true)
+        let storageURL = storageDirectory.appendingPathComponent("usage-snapshots.json", isDirectory: false)
+        let legacyURL = appSupport
+            .appendingPathComponent(legacyStorageDirectoryName, isDirectory: true)
             .appendingPathComponent("usage-snapshots.json", isDirectory: false)
+
+        migrateLegacyFileIfNeeded(from: legacyURL, to: storageURL, fileManager: fileManager)
+        return storageURL
+    }
+
+    private static func migrateLegacyFileIfNeeded(from legacyURL: URL, to storageURL: URL, fileManager: FileManager) {
+        guard !fileManager.fileExists(atPath: storageURL.path),
+              fileManager.fileExists(atPath: legacyURL.path) else {
+            return
+        }
+
+        do {
+            try fileManager.createDirectory(
+                at: storageURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try fileManager.moveItem(at: legacyURL, to: storageURL)
+        } catch {
+            try? fileManager.copyItem(at: legacyURL, to: storageURL)
+        }
     }
 }

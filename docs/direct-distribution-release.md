@@ -10,7 +10,7 @@ This repo targets direct macOS distribution through GitHub Releases, not the Mac
 - Optional notarization profile created once:
 
 ```bash
-xcrun notarytool store-credentials "UsageTool-Notary" \
+xcrun notarytool store-credentials "TokenGuard-Notary" \
   --apple-id "YOUR_APPLE_ID" \
   --team-id "YOUR_TEAM_ID" \
   --password "YOUR_APP_SPECIFIC_PASSWORD"
@@ -23,15 +23,15 @@ xcrun notarytool store-credentials "UsageTool-Notary" \
 
 ```bash
 swift test
-xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Debug -sdk macosx build
-xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Release -sdk macosx build
+xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Debug -sdk macosx build
+xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Release -sdk macosx build
 ```
 
 3. Build and archive the release app:
 
 ```bash
 xcodegen generate --spec project.yml
-xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Release -archivePath dist/UsageTool.xcarchive archive
+xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Release -archivePath dist/TokenGuard.xcarchive archive
 ```
 
 4. Sign the archived app with Developer ID:
@@ -39,29 +39,29 @@ xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Release
 ```bash
 codesign --force --options runtime --timestamp \
   --sign "Developer ID Application: YOUR NAME (TEAMID)" \
-  dist/UsageTool.xcarchive/Products/Applications/UsageTool.app
+  dist/TokenGuard.xcarchive/Products/Applications/TokenGuard.app
 codesign --verify --deep --strict --verbose=2 \
-  dist/UsageTool.xcarchive/Products/Applications/UsageTool.app
+  dist/TokenGuard.xcarchive/Products/Applications/TokenGuard.app
 ```
 
 5. Create the release zip:
 
 ```bash
 mkdir -p dist/staging
-cp -R dist/UsageTool.xcarchive/Products/Applications/UsageTool.app dist/staging/
-ditto -c -k --sequesterRsrc --keepParent dist/staging/UsageTool.app dist/UsageTool.zip
+cp -R dist/TokenGuard.xcarchive/Products/Applications/TokenGuard.app dist/staging/
+ditto -c -k --sequesterRsrc --keepParent dist/staging/TokenGuard.app dist/TokenGuard.zip
 ```
 
 6. Notarize the zip and staple the app:
 
 ```bash
-xcrun notarytool submit dist/UsageTool.zip --keychain-profile "UsageTool-Notary" --wait
-xcrun stapler staple dist/staging/UsageTool.app
-ditto -c -k --sequesterRsrc --keepParent dist/staging/UsageTool.app dist/UsageTool-notarized.zip
-spctl --assess --type execute --verbose dist/staging/UsageTool.app
+xcrun notarytool submit dist/TokenGuard.zip --keychain-profile "TokenGuard-Notary" --wait
+xcrun stapler staple dist/staging/TokenGuard.app
+ditto -c -k --sequesterRsrc --keepParent dist/staging/TokenGuard.app dist/TokenGuard-notarized.zip
+spctl --assess --type execute --verbose dist/staging/TokenGuard.app
 ```
 
-7. Upload `dist/UsageTool-notarized.zip` to a GitHub Release and include the current version/build in the release notes.
+7. Upload `dist/TokenGuard-notarized.zip` to a GitHub Release and include the current version/build in the release notes.
 
 ## Optional One-Command Path
 
@@ -75,7 +75,7 @@ With signing and notarization enabled:
 
 ```bash
 CODESIGN_IDENTITY="Developer ID Application: YOUR NAME (TEAMID)" \
-NOTARY_PROFILE="UsageTool-Notary" \
+NOTARY_PROFILE="TokenGuard-Notary" \
 scripts/release/build_release.sh
 ```
 
@@ -85,11 +85,11 @@ If you prefer a DMG instead of a zip, create it after the app is signed:
 
 ```bash
 mkdir -p dist/dmg
-cp -R dist/staging/UsageTool.app dist/dmg/
-hdiutil create -volname "UsageTool" -srcfolder dist/dmg -ov -format UDZO dist/UsageTool.dmg
-codesign --force --timestamp --sign "Developer ID Application: YOUR NAME (TEAMID)" dist/UsageTool.dmg
-xcrun notarytool submit dist/UsageTool.dmg --keychain-profile "UsageTool-Notary" --wait
-xcrun stapler staple dist/UsageTool.dmg
+cp -R dist/staging/TokenGuard.app dist/dmg/
+hdiutil create -volname "TokenGuard" -srcfolder dist/dmg -ov -format UDZO dist/TokenGuard.dmg
+codesign --force --timestamp --sign "Developer ID Application: YOUR NAME (TEAMID)" dist/TokenGuard.dmg
+xcrun notarytool submit dist/TokenGuard.dmg --keychain-profile "TokenGuard-Notary" --wait
+xcrun stapler staple dist/TokenGuard.dmg
 ```
 
 Zip remains the simpler default for GitHub Releases.

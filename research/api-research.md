@@ -1,4 +1,4 @@
-# UsageTool API Research Register
+# TokenGuard API Research Register
 
 > Status: provisional. This file is a research register, not a verified implementation spec.
 

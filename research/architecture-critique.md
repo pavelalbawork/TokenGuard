@@ -63,8 +63,8 @@ This is a significant chunk of work that isn't reflected in the current code or 
 ### 4. Two file trees
 **Impact: LOW (cleanup)**
 
-Root-level `Models/`, `Views/`, `Services/` AND `UsageTool/UsageTool/Models/`, etc. Need to pick one.
-- The `UsageTool/UsageTool/` tree is the more complete one (has all providers, tests)
+Root-level `Models/`, `Views/`, `Services/` AND `TokenGuard/TokenGuard/Models/`, etc. Need to pick one.
+- The `TokenGuard/TokenGuard/` tree is the more complete one (has all providers, tests)
 - Root-level tree appears to be Antigravity's output
 - Consolidate into a single Xcode project structure
 
@@ -92,7 +92,7 @@ Providers use `JSONSerialization.jsonObject()` → `[String: Any]` → manual ex
 ## Architecture Decisions To Lock
 
 ### Persistence
-- **Accounts list:** JSON file in Application Support (`~/Library/Application Support/UsageTool/accounts.json`)
+- **Accounts list:** JSON file in Application Support (`~/Library/Application Support/TokenGuard/accounts.json`)
 - **Credentials:** macOS Keychain (already implemented correctly in `KeychainManager`)
 - **Usage cache:** In-memory only (not persisted). Last snapshot per account survives the polling cycle but not app restarts. Can add persistence later if needed.
 

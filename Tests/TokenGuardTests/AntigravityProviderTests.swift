@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 private func antigravityHttpOK(data: Data, for url: URL) -> (HTTPURLResponse, Data) {
     let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!

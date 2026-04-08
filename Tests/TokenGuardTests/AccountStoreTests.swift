@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 @MainActor
 final class AccountStoreTests: XCTestCase {

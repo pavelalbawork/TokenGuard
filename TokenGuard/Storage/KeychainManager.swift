@@ -43,15 +43,18 @@ enum KeychainError: LocalizedError, Equatable, Sendable {
 
 struct KeychainManager: Sendable {
     private let serviceName: String
+    private let legacyServiceNames: [String]
     private let accessGroup: String?
     private let backingStore: KeychainBackingStore
 
     init(
-        serviceName: String = "com.palba.UsageTool.credentials",
+        serviceName: String = "com.palba.TokenGuard.credentials",
+        legacyServiceNames: [String] = ["com.palba.UsageTool.credentials"],
         accessGroup: String? = nil,
         backingStore: KeychainBackingStore = SecurityKeychainBackingStore()
     ) {
         self.serviceName = serviceName
+        self.legacyServiceNames = legacyServiceNames.filter { $0 != serviceName }
         self.accessGroup = accessGroup
         self.backingStore = backingStore
     }
@@ -78,7 +81,40 @@ struct KeychainManager: Sendable {
     }
 
     func readSecret(reference: String, allowUserInteraction: Bool = true) throws -> String? {
+        if let secret = try readSecret(
+            reference: reference,
+            serviceName: serviceName,
+            allowUserInteraction: allowUserInteraction
+        ) {
+            return secret
+        }
+
+        for legacyServiceName in legacyServiceNames {
+            guard let legacySecret = try readSecret(
+                reference: reference,
+                serviceName: legacyServiceName,
+                allowUserInteraction: allowUserInteraction
+            ) else {
+                continue
+            }
+
+            try? saveSecret(legacySecret, reference: reference)
+            return legacySecret
+        }
+
+        return nil
+    }
+
+    func deleteSecret(reference: String) throws {
+        try deleteSecret(reference: reference, serviceName: serviceName)
+        for legacyServiceName in legacyServiceNames {
+            try deleteSecret(reference: reference, serviceName: legacyServiceName)
+        }
+    }
+
+    private func readSecret(reference: String, serviceName: String, allowUserInteraction: Bool) throws -> String? {
         var query = baseQuery(reference: reference)
+        query[kSecAttrService as String] = serviceName
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         if !allowUserInteraction {
@@ -106,8 +142,10 @@ struct KeychainManager: Sendable {
         }
     }
 
-    func deleteSecret(reference: String) throws {
-        let status = backingStore.delete(query: baseQuery(reference: reference))
+    private func deleteSecret(reference: String, serviceName: String) throws {
+        var query = baseQuery(reference: reference)
+        query[kSecAttrService as String] = serviceName
+        let status = backingStore.delete(query: query)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unexpectedStatus(status)
         }

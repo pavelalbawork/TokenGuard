@@ -9,7 +9,7 @@ The app is materially healthier than the earlier critique suggested. Several ite
 ## Fixed Since The Earlier Critique
 
 - `AddAccountView` is now reachable from the menu bar shell instead of being stranded as an unused view.
-- `UsageToolApp` no longer double-initializes store dependencies. The app state is created once in `init`.
+- `TokenGuardApp` no longer double-initializes store dependencies. The app state is created once in `init`.
 - Menu bar status icon is dynamic and reflects worst observed quota ratio.
 - Poll cadence is based on enabled account service types, not the global minimum across all possible providers.
 - `AccountCardView` shows last-updated age text and marks stale snapshots distinctly.

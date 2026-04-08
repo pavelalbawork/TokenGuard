@@ -1,7 +1,7 @@
 import Foundation
 import Security
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 final class URLProtocolMock: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: (@Sendable (URLRequest) throws -> (HTTPURLResponse, Data))?

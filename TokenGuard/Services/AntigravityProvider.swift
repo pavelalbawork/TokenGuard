@@ -72,7 +72,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         let authState = try readAuthStateFromStateDb()
         let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
-        // Match this UsageTool account's name (email) to the corresponding
+        // Match this TokenGuard account's name (email) to the corresponding
         // Antigravity database account.  Fall back to the active/first account
         // when no email matches, preserving existing single-account behavior.
         let target: AntigravityAccount

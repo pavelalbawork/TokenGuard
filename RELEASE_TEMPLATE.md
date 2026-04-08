@@ -1,6 +1,6 @@
 # Release Template / Checklist
 
-Use this template when publishing a new version of UsageTool to GitHub Releases.
+Use this template when publishing a new version of TokenGuard to GitHub Releases.
 
 ## GitHub Release Title
 `vX.Y.Z - [Short descriptive summary of the release]`
@@ -19,13 +19,13 @@ Use this template when publishing a new version of UsageTool to GitHub Releases.
 
 ### Notes / Known Issues
 - [Mention any ongoing limitations or prerequisites if they changed]
-- *Reminder: UsageTool relies on local CLI state. If a provider's CLI updates and breaks tracking, please open an issue!*
+- *Reminder: TokenGuard relies on local CLI state. If a provider's CLI updates and breaks tracking, please open an issue!*
 
 ---
 
 ### Installation
-1. Download `UsageTool.zip` below.
-2. Unzip and drag `UsageTool.app` to your Applications folder.
+1. Download `TokenGuard.zip` below.
+2. Unzip and drag `TokenGuard.app` to your Applications folder.
 3. Open the app (it lives in your menu bar).
 
 *(Requires macOS 14.0+)*
@@ -38,8 +38,8 @@ If this utility makes your workflow easier, consider supporting its maintenance.
 ## Publishing Checklist
 
 - [ ] Ensure no hardcoded secrets or PII logging exist in the shipped source.
-- [ ] Verify `UsageTool.app` has the correct version and build numbers set.
+- [ ] Verify `TokenGuard.app` has the correct version and build numbers set.
 - [ ] Verify the build is signed and notarized for macOS.
-- [ ] Zip the `UsageTool.app` into `UsageTool.zip`.
-- [ ] Attach `UsageTool.zip` to the GitHub Release.
+- [ ] Zip the `TokenGuard.app` into `TokenGuard.zip`.
+- [ ] Attach `TokenGuard.zip` to the GitHub Release.
 - [ ] Publish Release.

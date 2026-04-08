@@ -57,7 +57,7 @@ This checkpoint exists so feature-preservation work has a regression reference.
 ### Baseline status on 2026-04-08
 
 - `swift test`: passing
-- `xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Release -sdk macosx build`: passing
+- `xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Release -sdk macosx build`: passing
 - repo working tree: clean
 - current branch: `main`
 
@@ -67,8 +67,8 @@ Run these before major changes and after each packet lands:
 
 ```bash
 swift test
-xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Debug -sdk macosx build
-xcodebuild -project UsageTool.xcodeproj -scheme UsageTool -configuration Release -sdk macosx build
+xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Debug -sdk macosx build
+xcodebuild -project TokenGuard.xcodeproj -scheme TokenGuard -configuration Release -sdk macosx build
 ```
 
 ### Baseline manual feature checklist
@@ -195,12 +195,12 @@ Scope:
 
 Primary files:
 
-- `UsageTool/Services/UsagePollingEngine.swift`
-- `UsageTool/Views/ServiceSectionView.swift`
-- `UsageTool/Storage/AccountStore.swift`
-- `UsageTool/Storage/UsageSnapshotCache.swift`
-- `UsageTool/Storage/KeychainManager.swift`
-- `UsageTool/Views/MainPopoverView.swift`
+- `TokenGuard/Services/UsagePollingEngine.swift`
+- `TokenGuard/Views/ServiceSectionView.swift`
+- `TokenGuard/Storage/AccountStore.swift`
+- `TokenGuard/Storage/UsageSnapshotCache.swift`
+- `TokenGuard/Storage/KeychainManager.swift`
+- `TokenGuard/Views/MainPopoverView.swift`
 
 ## Packet C: Public-launch UX cleanup
 
@@ -215,9 +215,9 @@ Scope:
 
 Primary files:
 
-- `UsageTool/Views/MainPopoverView.swift`
-- `UsageTool/Views/AddAccountView.swift`
-- `UsageTool/Views/SettingsView.swift`
+- `TokenGuard/Views/MainPopoverView.swift`
+- `TokenGuard/Views/AddAccountView.swift`
+- `TokenGuard/Views/SettingsView.swift`
 
 ## Packet D: Packaging and distribution
 
@@ -233,7 +233,7 @@ Scope:
 Primary files:
 
 - `project.yml`
-- `UsageTool/Resources/Assets.xcassets`
+- `TokenGuard/Resources/Assets.xcassets`
 - release docs/scripts
 
 ## Packet E: GitHub launch surfaces

@@ -1,12 +1,12 @@
 # RelayKit Usability Feedback — Current Status
 
-Reviewed: 2026-04-05 after the UsageTool follow-up fixes landed.
+Reviewed: 2026-04-05 after the TokenGuard follow-up fixes landed.
 
 This file is now split into fixed-vs-open so it stops acting like stale backlog input for future orchestration passes.
 
 ## Fixed / No Longer Representative Of Current Product State
 
-- The product-side items previously inferred from this session that were already fixed in `UsageTool` should not be treated as open backlog anymore:
+- The product-side items previously inferred from this session that were already fixed in `TokenGuard` should not be treated as open backlog anymore:
   - dynamic menu bar icon
   - smarter polling cadence
   - stale snapshot age text

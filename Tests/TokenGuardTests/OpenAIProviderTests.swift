@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import UsageTool
+@testable import TokenGuard
 
 private struct MockConsumerSnapshotReader: ConsumerUsageSnapshotReading {
     let windowsToReturn: [UsageWindow]?
