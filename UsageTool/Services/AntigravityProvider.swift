@@ -467,7 +467,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             byCategory[category, default: []].append((name, remaining, resetTime))
         }
 
-        return [QuotaPool.Category.anthropic, .geminiFlash, .geminiPro].compactMap { category in
+        return [QuotaPool.Category.anthropic, .geminiPro, .geminiFlash].compactMap { category in
             guard let entries = byCategory[category], !entries.isEmpty else { return nil }
             // Use the most-depleted model as the representative for this pool.
             let constraining = entries.min(by: { $0.remaining < $1.remaining })!

@@ -315,61 +315,40 @@ struct GlobalUsageHeroView: View {
         let (codex, claude, ag) = calculateMetrics()
         
         HStack(spacing: 20) {
-            // CODEX (Angular Segmented Gauge)
-            VStack(spacing: 12) {
-                CodexConcentricShield(metrics: codex, theme: theme, accent: theme.primaryAccent)
-                    .frame(width: 84, height: 84)
-                
-                VStack(spacing: 2) {
-                    Text("CODEX")
-                        .font(.system(size: 11, weight: .black))
-                        .tracking(1.5)
-                        .foregroundStyle(theme.textPrimary)
-                    if let short = codex.shortTerm {
-                        Text("\(Int(max(0, 1.0 - short) * 100))% 5H")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(theme.primaryAccent)
-                    }
-                }
-            }
+            UnifiedConcentricGauge(
+                title: "CODEX",
+                icon: "bolt.shield.fill",
+                shortLabel: "5H",
+                longLabel: "WK",
+                metrics: codex,
+                theme: theme,
+                baseColor: theme.primaryAccent.opacity(0.3),
+                accentColor: theme.primaryAccent
+            )
             .frame(maxWidth: .infinity)
             
-            // CLAUDE (Luminous Continuous Gauge)
-            VStack(spacing: 12) {
-                ClaudeConcentricShield(metrics: claude, theme: theme, accent: theme.secondaryAccent)
-                    .frame(width: 84, height: 84)
-                
-                VStack(spacing: 2) {
-                    Text("CLAUDE")
-                        .font(.system(size: 11, weight: .black))
-                        .tracking(1.5)
-                        .foregroundStyle(theme.textPrimary)
-                    if let short = claude.shortTerm {
-                        Text("\(Int(max(0, 1.0 - short) * 100))% 5H")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(theme.secondaryAccent)
-                    }
-                }
-            }
+            UnifiedConcentricGauge(
+                title: "CLAUDE",
+                icon: "bolt.shield.fill",
+                shortLabel: "5H",
+                longLabel: "WK",
+                metrics: claude,
+                theme: theme,
+                baseColor: theme.primaryAccent.opacity(0.3),
+                accentColor: theme.primaryAccent.opacity(0.8)
+            )
             .frame(maxWidth: .infinity)
             
-            // ANTIGRAVITY (Brutalist Synced Gauge)
-            VStack(spacing: 12) {
-                AntigravityConcentricShield(metrics: ag, theme: theme, accent: theme.textPrimary)
-                    .frame(width: 84, height: 84)
-                
-                VStack(spacing: 2) {
-                    Text("ANTIGRAVITY")
-                        .font(.system(size: 11, weight: .black))
-                        .tracking(1.0)
-                        .foregroundStyle(theme.textPrimary)
-                    if let short = ag.shortTerm {
-                        Text("\(Int(max(0, 1.0 - short) * 100))% DAY")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(theme.textSecondary)
-                    }
-                }
-            }
+            UnifiedConcentricGauge(
+                title: "ANTIGRAV",
+                icon: "bolt.shield.fill",
+                shortLabel: "DAY",
+                longLabel: "DAY",
+                metrics: ag,
+                theme: theme,
+                baseColor: theme.primaryAccent.opacity(0.3),
+                accentColor: theme.primaryAccent.opacity(0.6)
+            )
             .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 16)
@@ -425,10 +404,15 @@ struct GlobalUsageHeroView: View {
 
 // MARK: - GAUGE COMPONENTS
 
-struct CodexConcentricShield: View {
+struct UnifiedConcentricGauge: View {
+    let title: String
+    let icon: String
+    let shortLabel: String
+    let longLabel: String
     let metrics: GlobalUsageHeroView.ProviderMetrics
     let theme: Theme
-    let accent: Color
+    let baseColor: Color
+    let accentColor: Color
     
     @State private var isBreathing = false
     
@@ -439,154 +423,87 @@ struct CodexConcentricShield: View {
         let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
         let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
         
-        ZStack {
-            // Background Tracks
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
-                .frame(width: 84, height: 84)
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 2)
-                .frame(width: 70, height: 70)
-            
-            // Center Symbol
-            Image(systemName: "shield.lefthalf.filled")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(colors: [theme.tertiaryAccent, accent], startPoint: .bottomLeading, endPoint: .topTrailing)
-                )
-                .shadow(color: accent.opacity(0.3), radius: 6, x: 0, y: 0)
-                .scaleEffect(isBreathing ? 1.05 : 0.95)
-                .opacity(isBreathing ? 1.0 : 0.6)
-                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
-                .onAppear {
-                    isBreathing = true
+        VStack(spacing: 12) {
+            ZStack {
+                // Background Tracks
+                Circle()
+                    .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 6)
+                    .frame(width: 84, height: 84)
+                Circle()
+                    .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 4)
+                    .frame(width: 68, height: 68)
+                
+                // Micro-Labels positioned exactly on top of the tracks
+                VStack(spacing: 0) {
+                    Text(longLabel)
+                        .font(.system(size: 6, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(accentColor)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(theme.surfaceContainerHigh))
+                        .offset(y: -4)
+                    Spacer()
                 }
-            
-            // Inner Ring (Weekly) - Continuous, thin
-            Circle()
-                .trim(from: 0.0, to: longRemaining)
-                .stroke(accent.opacity(0.8), style: StrokeStyle(lineWidth: 2, lineCap: .square))
-                .frame(width: 70, height: 70)
-                .rotationEffect(.degrees(-90))
-            
-            // Outer Ring (5H) - Angular segmented dash
-            Circle()
-                .trim(from: 0.0, to: shortRemaining)
-                .stroke(
-                    LinearGradient(colors: [theme.tertiaryAccent, accent], startPoint: .bottom, endPoint: .top),
-                    style: StrokeStyle(lineWidth: 4, lineCap: .square, dash: [6, 4])
-                )
-                .frame(width: 84, height: 84)
-                .rotationEffect(.degrees(-90))
-                .shadow(color: accent.opacity(0.7), radius: 4, x: 0, y: 0)
-        }
-    }
-}
-
-struct ClaudeConcentricShield: View {
-    let metrics: GlobalUsageHeroView.ProviderMetrics
-    let theme: Theme
-    let accent: Color
-    
-    @State private var isBreathing = false
-    
-    var body: some View {
-        let shortVal = metrics.shortTerm ?? 0.0
-        let longVal = metrics.longTerm ?? 0.0
-        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0)))
-        let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
-        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
-        
-        ZStack {
-            // Background Tracks
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 6)
-                .frame(width: 84, height: 84)
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
-                .frame(width: 68, height: 68)
-            
-            // Center Symbol
-            Image(systemName: "shield.righthalf.filled")
-                .font(.system(size: 34, weight: .ultraLight))
-                .foregroundStyle(accent)
-                .shadow(color: accent.opacity(0.5), radius: 8, x: 0, y: 0)
-                .scaleEffect(isBreathing ? 1.05 : 0.95)
-                .opacity(isBreathing ? 1.0 : 0.6)
-                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
-                .onAppear {
-                    isBreathing = true
+                .frame(height: 84)
+                
+                VStack(spacing: 0) {
+                    Spacer()
+                    Text(shortLabel)
+                        .font(.system(size: 6, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(accentColor)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(theme.surfaceContainerHigh))
+                        .offset(y: 4)
                 }
+                .frame(height: 68)
+                
+                // Center Symbol
+                Image(systemName: icon)
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(
+                        LinearGradient(colors: [baseColor, accentColor], startPoint: .bottomLeading, endPoint: .topTrailing)
+                    )
+                    .shadow(color: accentColor.opacity(0.3), radius: 6, x: 0, y: 0)
+                    .scaleEffect(isBreathing ? 1.05 : 0.95)
+                    .opacity(isBreathing ? 1.0 : 0.6)
+                    .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
+                    .onAppear {
+                        isBreathing = true
+                    }
+                
+                // Inner Ring (Short-Term limit)
+                Circle()
+                    .trim(from: 0.0, to: shortRemaining)
+                    .stroke(baseColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 68, height: 68)
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: baseColor.opacity(0.4), radius: 3, x: 0, y: 0)
+                
+                // Outer Ring (Long-Term limit)
+                Circle()
+                    .trim(from: 0.0, to: longRemaining)
+                    .stroke(
+                        LinearGradient(colors: [baseColor, accentColor], startPoint: .bottom, endPoint: .top),
+                        style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                    )
+                    .frame(width: 84, height: 84)
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: accentColor.opacity(0.6), radius: 4, x: 0, y: 0)
+            }
+            .frame(width: 84, height: 84)
             
-            // Inner Ring (Weekly) - Luminous soft glow
-            Circle()
-                .trim(from: 0.0, to: longRemaining)
-                .stroke(accent.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .frame(width: 68, height: 68)
-                .rotationEffect(.degrees(-90))
-                .blur(radius: 1)
-            
-            // Outer Ring (5H) - Smooth fluid gradient ring
-            Circle()
-                .trim(from: 0.0, to: shortRemaining)
-                .stroke(
-                    RadialGradient(gradient: Gradient(colors: [accent, theme.tertiaryAccent]), center: .center, startRadius: 20, endRadius: 50),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .frame(width: 84, height: 84)
-                .rotationEffect(.degrees(-90))
-                .shadow(color: accent.opacity(0.8), radius: 5, x: 0, y: 0)
-        }
-    }
-}
-
-struct AntigravityConcentricShield: View {
-    let metrics: GlobalUsageHeroView.ProviderMetrics
-    let theme: Theme
-    let accent: Color
-    
-    @State private var isBreathing = false
-    
-    var body: some View {
-        let shortVal = metrics.shortTerm ?? 0.0
-        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0))) // Single metric controls all
-        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
-        
-        ZStack {
-            // Background Tracks
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 8)
-                .frame(width: 84, height: 84)
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.7), lineWidth: 6)
-                .frame(width: 64, height: 64)
-            
-            // Center Symbol
-            Image(systemName: "bolt.shield.fill")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(theme.textSecondary)
-                .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
-                .scaleEffect(isBreathing ? 1.05 : 0.95)
-                .opacity(isBreathing ? 1.0 : 0.6)
-                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
-                .onAppear {
-                    isBreathing = true
+            VStack(spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(1.5)
+                    .foregroundStyle(theme.textPrimary)
+                if let short = metrics.shortTerm {
+                    Text("\(Int(max(0, 1.0 - short) * 100))% \(shortLabel)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(accentColor)
                 }
-            
-            // Inner Ring (Daily Sync)
-            Circle()
-                .trim(from: 0.0, to: shortRemaining)
-                .stroke(accent.opacity(0.8), style: StrokeStyle(lineWidth: 6, lineCap: .butt))
-                .frame(width: 64, height: 64)
-                .rotationEffect(.degrees(-90))
-            
-            // Outer Ring (Daily Sync) - Heavy brutalist block
-            Circle()
-                .trim(from: 0.0, to: shortRemaining)
-                .stroke(accent, style: StrokeStyle(lineWidth: 8, lineCap: .square))
-                .frame(width: 84, height: 84)
-                .rotationEffect(.degrees(-90))
-                .shadow(color: accent.opacity(0.3), radius: 4, x: 0, y: 0)
+            }
         }
     }
 }

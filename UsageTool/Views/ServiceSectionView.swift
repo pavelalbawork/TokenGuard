@@ -53,9 +53,6 @@ struct ServiceSectionView: View {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
                     }
-                    if let connectionStatus = state?.connectionStatus {
-                        connectionBadge(connectionStatus, theme: theme)
-                    }
                 }
 
                 Spacer()
@@ -90,10 +87,6 @@ struct ServiceSectionView: View {
                                     .padding(.vertical, 1)
                                     .background(serviceType.tintColor(for: theme).opacity(0.15), in: .rect(cornerRadius: 2))
                                     .foregroundStyle(serviceType.tintColor(for: theme))
-                            }
-
-                            if let connectionStatus = pollingEngine.accountStates[account.id]?.connectionStatus {
-                                connectionBadge(connectionStatus, theme: theme)
                             }
 
                             Spacer()

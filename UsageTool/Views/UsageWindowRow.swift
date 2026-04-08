@@ -36,12 +36,7 @@ struct UsageWindowRow: View {
     }
 
     private var valueColor: Color {
-        let theme = themeManager.currentTheme
-        switch window.usageStatus {
-        case .critical: return theme.error
-        case .warning: return theme.secondaryAccent
-        case .normal: return theme.textPrimary
-        }
+        return themeManager.currentTheme.textPrimary
     }
 
     private var valueText: String {
