@@ -16,7 +16,7 @@ struct MainPopoverView: View {
     @State private var isAddingAccount = false
     @Namespace private var animationNameSpace
 
-    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
 
     var body: some View {
         @Bindable var bindableThemeManager = themeManager
@@ -305,116 +305,130 @@ struct GlobalUsageHeroView: View {
     
     var body: some View {
         let theme = themeManager.currentTheme
-        let totalProgress = calculateGlobalProgress()
+        let aggregates = calculateAggregates()
         
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("OVERALL")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(2.0)
+        // Option C: Banking App Layout
+        HStack(alignment: .center) {
+            // Left Side: Massive Typography for Weekly Limit
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WEEKLY CAPACITY IN RESERVE")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.2)
                     .foregroundStyle(theme.textSecondary)
                 
-                Text("\(Int((1.0 - totalProgress) * 100))%")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text("\(Int((1.0 - aggregates.weekly) * 100))")
+                        .font(.system(size: 54, weight: .ultraLight, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
+                    Text("%")
+                        .font(.system(size: 24, weight: .light, design: .rounded))
+                        .foregroundStyle(theme.textSecondary)
+                }
                 
-                Text("AVG. REMAINING")
-                    .font(.system(size: 9, weight: .medium))
-                    .tracking(0.5)
-                    .foregroundStyle(theme.textSecondary.opacity(0.7))
+                Text(aggregates.weekly > 0.9 ? "Threshold warning." : "Safe to proceed.")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.secondaryAccent.opacity(0.8))
             }
             
             Spacer()
             
-            ZStack {
-                CyberDialGraphic(
-                    progress: totalProgress,
-                    theme: theme
-                )
-                .frame(width: 60, height: 60)
+            // Right Side: Focus entirely on the 5H Shield as the tactical indicator
+            VStack(spacing: 8) {
+                let remaining = CGFloat(max(0, 1.0 - min(aggregates.rolling, 1.0)))
+                ZStack {
+                    Image(systemName: "shield")
+                        .font(.system(size: 46, weight: .ultraLight))
+                        .foregroundStyle(theme.textSecondary.opacity(0.2))
+                    
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 46, weight: .ultraLight))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [theme.tertiaryAccent, theme.primaryAccent],
+                                startPoint: .bottomLeading,
+                                endPoint: .topTrailing
+                            )
+                        )
+                        .mask(alignment: .bottom) {
+                            GeometryReader { geo in
+                                Rectangle()
+                                    .frame(height: geo.size.height * remaining)
+                                    .frame(maxHeight: .infinity, alignment: .bottom)
+                            }
+                        }
+                        .shadow(color: theme.primaryAccent.opacity(0.5), radius: 8, x: 0, y: 0)
+                    
+                    Text("\(Int((1.0 - aggregates.rolling) * 100))%")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .offset(y: -2)
+                }
+                .frame(width: 50, height: 50)
                 
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 18, weight: .light))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(theme.secondaryAccent)
+                Text("5H ROLLING")
+                    .font(.system(size: 9, weight: .heavy))
+                    .tracking(1.0)
+                    .foregroundStyle(theme.textSecondary)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(theme.surfaceContainerHigh.opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(theme.border, lineWidth: 1)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(theme.surfaceContainerHigh.opacity(0.3)) // Ultra luxury finish
         )
     }
     
-    private func calculateGlobalProgress() -> Double {
-        var totalPercent = 0.0
-        var windowCount = 0
+    private func calculateAggregates() -> (rolling: Double, weekly: Double) {
+        var rollingTotal = 0.0
+        var rollingCount = 0
+        var weeklyTotal = 0.0
+        var weeklyCount = 0
         
         for state in pollingEngine.accountStates.values {
             guard let snapshot = state.snapshot else { continue }
-            for window in snapshot.windows {
+            
+            var hasActiveWeeklyLimit = false
+            var weeklyExhausted = false
+            var accountWeeklyProgress: Double? = nil
+            
+            for window in snapshot.windows where window.windowType == .weekly {
+                hasActiveWeeklyLimit = true
                 if let percent = window.percentUsed {
-                    totalPercent += percent
-                    windowCount += 1
+                    accountWeeklyProgress = percent
+                    if percent >= 1.0 { weeklyExhausted = true }
                 } else if let limit = window.limit, limit > 0 {
-                    totalPercent += (window.used / limit)
-                    windowCount += 1
+                    let progress = window.used / limit
+                    accountWeeklyProgress = progress
+                    if progress >= 1.0 { weeklyExhausted = true }
+                }
+            }
+            
+            if hasActiveWeeklyLimit, let wProg = accountWeeklyProgress {
+                weeklyTotal += wProg
+                weeklyCount += 1
+            }
+            
+            if hasActiveWeeklyLimit && !weeklyExhausted {
+                for window in snapshot.windows where window.windowType == .rolling5h {
+                    if let percent = window.percentUsed {
+                        rollingTotal += percent
+                        rollingCount += 1
+                    } else if let limit = window.limit, limit > 0 {
+                        rollingTotal += (window.used / limit)
+                        rollingCount += 1
+                    }
                 }
             }
         }
         
-        return windowCount > 0 ? (totalPercent / Double(windowCount)) : 0.0
+        let avgRolling = rollingCount > 0 ? (rollingTotal / Double(rollingCount)) : 0.0
+        let avgWeekly = weeklyCount > 0 ? (weeklyTotal / Double(weeklyCount)) : 0.0
+        return (avgRolling, avgWeekly)
     }
 }
 
-struct CyberDialGraphic: View {
-    var progress: Double // 0 to 1
-    var theme: Theme
-    
-    var body: some View {
-        ZStack {
-            // Outer dashed container
-            Circle()
-                .stroke(theme.surfaceContainerHigh, style: StrokeStyle(lineWidth: 2, dash: [4, 4]))
-                .frame(width: 80, height: 80)
-                
-            // Inner thick background track
-            Circle()
-                .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 8)
-                .frame(width: 64, height: 64)
-            
-            // The live draining capacity ring
-            let remaining = CGFloat(max(0, 1.0 - min(progress, 1.0)))
-            Circle()
-                .trim(from: 0, to: remaining)
-                .stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: [theme.tertiaryAccent, theme.primaryAccent]),
-                        center: .center,
-                        startAngle: .degrees(-90),
-                        endAngle: .degrees(270)
-                    ),
-                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.8, dampingFraction: 0.6), value: remaining)
-                .frame(width: 64, height: 64)
-                .shadow(color: theme.primaryAccent.opacity(0.8), radius: 6, x: 0, y: 0)
-                
-            // Center crosshairs
-            Path { path in
-                path.move(to: CGPoint(x: 40, y: 35))
-                path.addLine(to: CGPoint(x: 40, y: 45))
-                path.move(to: CGPoint(x: 35, y: 40))
-                path.addLine(to: CGPoint(x: 45, y: 40))
-            }
-            .stroke(theme.secondaryAccent.opacity(0.5), lineWidth: 1)
-        }
-    }
-}
+
 
 // MARK: - LIMITS VIEW FRONTEND
 

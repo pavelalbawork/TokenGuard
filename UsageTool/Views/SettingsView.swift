@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
     
-    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     @AppStorage("globalRefreshIntervalMins") private var refreshIntervalMins: Int = 15
     

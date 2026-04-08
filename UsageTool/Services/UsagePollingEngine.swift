@@ -42,7 +42,6 @@ final class UsagePollingEngine {
         serviceRefreshIntervals: [ServiceType: TimeInterval] = [
             .claude: 300,
             .codex: 5,
-            .gemini: 300,
             .antigravity: 30
         ],
         sleep: @escaping @Sendable (TimeInterval) async -> Void = { interval in
@@ -57,7 +56,6 @@ final class UsagePollingEngine {
         self.providers = providers ?? [
             .claude: AnthropicProvider(),
             .codex: OpenAIProvider(codexLiveStateProvider: codexClient),
-            .gemini: GeminiProvider(),
             .antigravity: AntigravityProvider()
         ]
         self.serviceRefreshIntervals = serviceRefreshIntervals
@@ -347,9 +345,10 @@ final class UsagePollingEngine {
         for account: Account,
         keychainManager: KeychainManager
     ) throws -> String {
-        _ = account
-        _ = keychainManager
-        return ""
+        if account.credentialRef.isEmpty {
+            return ""
+        }
+        return try keychainManager.readSecret(reference: account.credentialRef) ?? ""
     }
 
     private func handleCodexLiveState(_ liveState: CodexLiveState) async {
