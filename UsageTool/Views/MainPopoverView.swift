@@ -54,7 +54,7 @@ struct MainPopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(theme.textSecondary)
-                    
+
                     Menu {
                         Picker("Theme", selection: $bindableThemeManager.selectedThemeId) {
                             ForEach(Theme.all) { t in
@@ -299,79 +299,80 @@ struct EdgeBorder: Shape {
     }
 }
 
+// MARK: - HERO VIEW
 struct GlobalUsageHeroView: View {
+    @Environment(AccountStore.self) private var accountStore
     @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
     
+    struct ProviderMetrics {
+        var shortTerm: Double? // 5H rolling
+        var longTerm: Double?  // Weekly/Daily limit
+    }
+    
     var body: some View {
         let theme = themeManager.currentTheme
-        let aggregates = calculateAggregates()
+        let (codex, claude, ag) = calculateMetrics()
         
-        // Option C: Banking App Layout
-        HStack(alignment: .center) {
-            // Left Side: Massive Typography for Weekly Limit
-            VStack(alignment: .leading, spacing: 4) {
-                Text("WEEKLY CAPACITY IN RESERVE")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(theme.textSecondary)
+        HStack(spacing: 20) {
+            // CODEX (Angular Segmented Gauge)
+            VStack(spacing: 12) {
+                CodexConcentricShield(metrics: codex, theme: theme, accent: theme.primaryAccent)
+                    .frame(width: 84, height: 84)
                 
-                HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(Int((1.0 - aggregates.weekly) * 100))")
-                        .font(.system(size: 54, weight: .ultraLight, design: .rounded))
+                VStack(spacing: 2) {
+                    Text("CODEX")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.5)
                         .foregroundStyle(theme.textPrimary)
-                    Text("%")
-                        .font(.system(size: 24, weight: .light, design: .rounded))
-                        .foregroundStyle(theme.textSecondary)
+                    if let short = codex.shortTerm {
+                        Text("\(Int(max(0, 1.0 - short) * 100))% 5H")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(theme.primaryAccent)
+                    }
                 }
-                
-                Text(aggregates.weekly > 0.9 ? "Threshold warning." : "Safe to proceed.")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(theme.secondaryAccent.opacity(0.8))
             }
+            .frame(maxWidth: .infinity)
             
-            Spacer()
-            
-            // Right Side: Focus entirely on the 5H Shield as the tactical indicator
-            VStack(spacing: 8) {
-                let remaining = CGFloat(max(0, 1.0 - min(aggregates.rolling, 1.0)))
-                ZStack {
-                    Image(systemName: "shield")
-                        .font(.system(size: 46, weight: .ultraLight))
-                        .foregroundStyle(theme.textSecondary.opacity(0.2))
-                    
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 46, weight: .ultraLight))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [theme.tertiaryAccent, theme.primaryAccent],
-                                startPoint: .bottomLeading,
-                                endPoint: .topTrailing
-                            )
-                        )
-                        .mask(alignment: .bottom) {
-                            GeometryReader { geo in
-                                Rectangle()
-                                    .frame(height: geo.size.height * remaining)
-                                    .frame(maxHeight: .infinity, alignment: .bottom)
-                            }
-                        }
-                        .shadow(color: theme.primaryAccent.opacity(0.5), radius: 8, x: 0, y: 0)
-                    
-                    Text("\(Int((1.0 - aggregates.rolling) * 100))%")
-                        .font(.system(size: 12, weight: .heavy))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .offset(y: -2)
+            // CLAUDE (Luminous Continuous Gauge)
+            VStack(spacing: 12) {
+                ClaudeConcentricShield(metrics: claude, theme: theme, accent: theme.secondaryAccent)
+                    .frame(width: 84, height: 84)
+                
+                VStack(spacing: 2) {
+                    Text("CLAUDE")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.5)
+                        .foregroundStyle(theme.textPrimary)
+                    if let short = claude.shortTerm {
+                        Text("\(Int(max(0, 1.0 - short) * 100))% 5H")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(theme.secondaryAccent)
+                    }
                 }
-                .frame(width: 50, height: 50)
-                
-                Text("5H ROLLING")
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(1.0)
-                    .foregroundStyle(theme.textSecondary)
             }
+            .frame(maxWidth: .infinity)
+            
+            // ANTIGRAVITY (Brutalist Synced Gauge)
+            VStack(spacing: 12) {
+                AntigravityConcentricShield(metrics: ag, theme: theme, accent: theme.textPrimary)
+                    .frame(width: 84, height: 84)
+                
+                VStack(spacing: 2) {
+                    Text("ANTIGRAVITY")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.0)
+                        .foregroundStyle(theme.textPrimary)
+                    if let short = ag.shortTerm {
+                        Text("\(Int(max(0, 1.0 - short) * 100))% DAY")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(theme.textSecondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 16)
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: 16)
@@ -379,52 +380,214 @@ struct GlobalUsageHeroView: View {
         )
     }
     
-    private func calculateAggregates() -> (rolling: Double, weekly: Double) {
-        var rollingTotal = 0.0
-        var rollingCount = 0
-        var weeklyTotal = 0.0
-        var weeklyCount = 0
+    private func calculateMetrics() -> (codex: ProviderMetrics, claude: ProviderMetrics, ag: ProviderMetrics) {
+        var c_shortTot = 0.0, c_shortCnt = 0, c_longTot = 0.0, c_longCnt = 0
+        var cl_shortTot = 0.0, cl_shortCnt = 0, cl_longTot = 0.0, cl_longCnt = 0
+        var ag_tot = 0.0, ag_cnt = 0
         
-        for state in pollingEngine.accountStates.values {
-            guard let snapshot = state.snapshot else { continue }
+        for account in accountStore.accounts {
+            guard let state = pollingEngine.accountStates[account.id], let snapshot = state.snapshot else { continue }
             
-            var hasActiveWeeklyLimit = false
-            var weeklyExhausted = false
-            var accountWeeklyProgress: Double? = nil
-            
-            for window in snapshot.windows where window.windowType == .weekly {
-                hasActiveWeeklyLimit = true
-                if let percent = window.percentUsed {
-                    accountWeeklyProgress = percent
-                    if percent >= 1.0 { weeklyExhausted = true }
-                } else if let limit = window.limit, limit > 0 {
-                    let progress = window.used / limit
-                    accountWeeklyProgress = progress
-                    if progress >= 1.0 { weeklyExhausted = true }
-                }
-            }
-            
-            if hasActiveWeeklyLimit, let wProg = accountWeeklyProgress {
-                weeklyTotal += wProg
-                weeklyCount += 1
-            }
-            
-            if hasActiveWeeklyLimit && !weeklyExhausted {
-                for window in snapshot.windows where window.windowType == .rolling5h {
-                    if let percent = window.percentUsed {
-                        rollingTotal += percent
-                        rollingCount += 1
-                    } else if let limit = window.limit, limit > 0 {
-                        rollingTotal += (window.used / limit)
-                        rollingCount += 1
+            for window in snapshot.windows {
+                guard let progress = window.percentUsed else { continue }
+                
+                if account.serviceType == .codex {
+                    if window.windowType == .rolling5h { c_shortTot += progress; c_shortCnt += 1 }
+                    else if window.windowType == .weekly { c_longTot += progress; c_longCnt += 1 }
+                } else if account.serviceType == .claude {
+                    if window.windowType == .rolling5h { cl_shortTot += progress; cl_shortCnt += 1 }
+                    else if window.windowType == .weekly { cl_longTot += progress; cl_longCnt += 1 }
+                } else if account.serviceType == .antigravity {
+                    // Ignore Flash
+                    if window.label == "Anthropic (Claude)" || window.label == "Gemini Pro" {
+                        ag_tot += progress; ag_cnt += 1
                     }
                 }
             }
         }
         
-        let avgRolling = rollingCount > 0 ? (rollingTotal / Double(rollingCount)) : 0.0
-        let avgWeekly = weeklyCount > 0 ? (weeklyTotal / Double(weeklyCount)) : 0.0
-        return (avgRolling, avgWeekly)
+        let codex = ProviderMetrics(
+            shortTerm: c_shortCnt > 0 ? (c_shortTot / Double(c_shortCnt)) : nil,
+            longTerm: c_longCnt > 0 ? (c_longTot / Double(c_longCnt)) : nil
+        )
+        
+        let claude = ProviderMetrics(
+            shortTerm: cl_shortCnt > 0 ? (cl_shortTot / Double(cl_shortCnt)) : nil,
+            longTerm: cl_longCnt > 0 ? (cl_longTot / Double(cl_longCnt)) : nil
+        )
+        
+        let agVal: Double? = ag_cnt > 0 ? (ag_tot / Double(ag_cnt)) : nil
+        let ag = ProviderMetrics(shortTerm: agVal, longTerm: agVal)
+        
+        return (codex, claude, ag)
+    }
+}
+
+// MARK: - GAUGE COMPONENTS
+
+struct CodexConcentricShield: View {
+    let metrics: GlobalUsageHeroView.ProviderMetrics
+    let theme: Theme
+    let accent: Color
+    
+    @State private var isBreathing = false
+    
+    var body: some View {
+        let shortVal = metrics.shortTerm ?? 0.0
+        let longVal = metrics.longTerm ?? 0.0
+        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0)))
+        let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
+        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
+        
+        ZStack {
+            // Background Tracks
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
+                .frame(width: 84, height: 84)
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 2)
+                .frame(width: 70, height: 70)
+            
+            // Center Symbol
+            Image(systemName: "shield.lefthalf.filled")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(colors: [theme.tertiaryAccent, accent], startPoint: .bottomLeading, endPoint: .topTrailing)
+                )
+                .shadow(color: accent.opacity(0.3), radius: 6, x: 0, y: 0)
+                .scaleEffect(isBreathing ? 1.05 : 0.95)
+                .opacity(isBreathing ? 1.0 : 0.6)
+                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
+                .onAppear {
+                    isBreathing = true
+                }
+            
+            // Inner Ring (Weekly) - Continuous, thin
+            Circle()
+                .trim(from: 0.0, to: longRemaining)
+                .stroke(accent.opacity(0.8), style: StrokeStyle(lineWidth: 2, lineCap: .square))
+                .frame(width: 70, height: 70)
+                .rotationEffect(.degrees(-90))
+            
+            // Outer Ring (5H) - Angular segmented dash
+            Circle()
+                .trim(from: 0.0, to: shortRemaining)
+                .stroke(
+                    LinearGradient(colors: [theme.tertiaryAccent, accent], startPoint: .bottom, endPoint: .top),
+                    style: StrokeStyle(lineWidth: 4, lineCap: .square, dash: [6, 4])
+                )
+                .frame(width: 84, height: 84)
+                .rotationEffect(.degrees(-90))
+                .shadow(color: accent.opacity(0.7), radius: 4, x: 0, y: 0)
+        }
+    }
+}
+
+struct ClaudeConcentricShield: View {
+    let metrics: GlobalUsageHeroView.ProviderMetrics
+    let theme: Theme
+    let accent: Color
+    
+    @State private var isBreathing = false
+    
+    var body: some View {
+        let shortVal = metrics.shortTerm ?? 0.0
+        let longVal = metrics.longTerm ?? 0.0
+        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0)))
+        let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
+        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
+        
+        ZStack {
+            // Background Tracks
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 6)
+                .frame(width: 84, height: 84)
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
+                .frame(width: 68, height: 68)
+            
+            // Center Symbol
+            Image(systemName: "shield.righthalf.filled")
+                .font(.system(size: 34, weight: .ultraLight))
+                .foregroundStyle(accent)
+                .shadow(color: accent.opacity(0.5), radius: 8, x: 0, y: 0)
+                .scaleEffect(isBreathing ? 1.05 : 0.95)
+                .opacity(isBreathing ? 1.0 : 0.6)
+                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
+                .onAppear {
+                    isBreathing = true
+                }
+            
+            // Inner Ring (Weekly) - Luminous soft glow
+            Circle()
+                .trim(from: 0.0, to: longRemaining)
+                .stroke(accent.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .frame(width: 68, height: 68)
+                .rotationEffect(.degrees(-90))
+                .blur(radius: 1)
+            
+            // Outer Ring (5H) - Smooth fluid gradient ring
+            Circle()
+                .trim(from: 0.0, to: shortRemaining)
+                .stroke(
+                    RadialGradient(gradient: Gradient(colors: [accent, theme.tertiaryAccent]), center: .center, startRadius: 20, endRadius: 50),
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .frame(width: 84, height: 84)
+                .rotationEffect(.degrees(-90))
+                .shadow(color: accent.opacity(0.8), radius: 5, x: 0, y: 0)
+        }
+    }
+}
+
+struct AntigravityConcentricShield: View {
+    let metrics: GlobalUsageHeroView.ProviderMetrics
+    let theme: Theme
+    let accent: Color
+    
+    @State private var isBreathing = false
+    
+    var body: some View {
+        let shortVal = metrics.shortTerm ?? 0.0
+        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0))) // Single metric controls all
+        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
+        
+        ZStack {
+            // Background Tracks
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 8)
+                .frame(width: 84, height: 84)
+            Circle()
+                .stroke(theme.surfaceContainerHigh.opacity(0.7), lineWidth: 6)
+                .frame(width: 64, height: 64)
+            
+            // Center Symbol
+            Image(systemName: "bolt.shield.fill")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(theme.textSecondary)
+                .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
+                .scaleEffect(isBreathing ? 1.05 : 0.95)
+                .opacity(isBreathing ? 1.0 : 0.6)
+                .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
+                .onAppear {
+                    isBreathing = true
+                }
+            
+            // Inner Ring (Daily Sync)
+            Circle()
+                .trim(from: 0.0, to: shortRemaining)
+                .stroke(accent.opacity(0.8), style: StrokeStyle(lineWidth: 6, lineCap: .butt))
+                .frame(width: 64, height: 64)
+                .rotationEffect(.degrees(-90))
+            
+            // Outer Ring (Daily Sync) - Heavy brutalist block
+            Circle()
+                .trim(from: 0.0, to: shortRemaining)
+                .stroke(accent, style: StrokeStyle(lineWidth: 8, lineCap: .square))
+                .frame(width: 84, height: 84)
+                .rotationEffect(.degrees(-90))
+                .shadow(color: accent.opacity(0.3), radius: 4, x: 0, y: 0)
+        }
     }
 }
 
