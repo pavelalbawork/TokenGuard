@@ -158,38 +158,50 @@ struct InlineAddAccountView: View {
         isSaving = true
         statusMessage = nil
 
-        let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
-        
-        // Construct the implicit "consumer" state logic
-        var configuration: [String: String] = [:]
-        
-        if selectedProvider == .claude || selectedProvider == .codex {
-            configuration[Account.ConfigurationKey.planType] = "consumer"
-            let normalizedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if normalizedName.contains("@") && selectedProvider == .codex {
-                configuration[Account.ConfigurationKey.consumerEmail] = normalizedName
-            }
-        }
-        
-        let account = Account(
-            name: accountName.trimmingCharacters(in: .whitespacesAndNewlines),
-            serviceType: selectedProvider,
-            credentialRef: credentialRef,
-            configuration: configuration
-        )
-
-        do {
-            try accountStore.add(account)
-            Task {
+        let normalizedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                let account = try await buildAccount(named: normalizedName)
+                try accountStore.add(account)
                 await pollingEngine.refreshAll(force: true)
                 await MainActor.run {
                     isSaving = false
                     onComplete()
                 }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    statusMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                }
             }
-        } catch {
-            isSaving = false
-            statusMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private func buildAccount(named normalizedName: String) async throws -> Account {
+        let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
+        var configuration: [String: String] = [:]
+
+        if selectedProvider == .claude || selectedProvider == .codex || selectedProvider == .antigravity {
+            configuration[Account.ConfigurationKey.planType] = "consumer"
+        }
+
+        let normalizedAlias = normalizedName.lowercased()
+        if normalizedAlias.contains("@") && (selectedProvider == .codex || selectedProvider == .antigravity) {
+            configuration[Account.ConfigurationKey.consumerEmail] = normalizedAlias
+        }
+
+        if selectedProvider == .antigravity,
+           configuration[Account.ConfigurationKey.consumerEmail] == nil,
+           let identity = try await AntigravityProvider().currentConsumerIdentity(),
+           let email = identity.email {
+            configuration[Account.ConfigurationKey.consumerEmail] = email
+        }
+
+        return Account(
+            name: normalizedName,
+            serviceType: selectedProvider,
+            credentialRef: credentialRef,
+            configuration: configuration
+        )
     }
 }

@@ -43,7 +43,7 @@ struct AccountCardView: View {
                             .foregroundStyle(theme.error.opacity(0.8))
 
                         if account.serviceType == .antigravity {
-                            Text("Requires Antigravity Manager to be installed and running.")
+                            Text("Uses the local Antigravity app state. Reopen Antigravity if authentication needs a refresh.")
                                 .font(.system(size: 8, weight: .medium))
                                 .foregroundStyle(theme.textSecondary.opacity(0.6))
                         }
@@ -101,6 +101,7 @@ struct AccountCardView: View {
         if message.contains("database not found") { return "Antigravity DB not found" }
         if message.contains("key file not found") { return "Antigravity key file missing" }
         if message.contains("unexpected format") { return "Unsupported key format" }
+        if message.contains("provided credentials were rejected") { return "Antigravity sign-in needs refresh" }
         return message
     }
 }

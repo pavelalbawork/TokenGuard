@@ -35,7 +35,7 @@ final class AccountStore {
 
         do {
             let payload = try loadPayload()
-            self.accounts = payload.accounts
+            self.accounts = Self.migratedAccounts(payload.accounts)
             self.activeConsumerAccountIDs = payload.activeConsumerAccountIDs
         } catch {
             self.accounts = []
@@ -121,15 +121,27 @@ final class AccountStore {
         let data = try Data(contentsOf: storageURL)
         // Migrate: old format was a bare [Account] array
         if let accounts = try? decoder.decode([Account].self, from: data) {
+            let migratedAccounts = Self.migratedAccounts(accounts)
             // Rebuild active map from migrated accounts
             var activeMap: [String: UUID] = [:]
-            for account in accounts where account.planType == "consumer" {
+            for account in migratedAccounts where account.planType == "consumer" {
                 let key = account.serviceType.rawValue
                 if activeMap[key] == nil { activeMap[key] = account.id }
             }
-            return StoragePayload(accounts: accounts, activeConsumerAccountIDs: activeMap)
+            return StoragePayload(accounts: migratedAccounts, activeConsumerAccountIDs: activeMap)
         }
-        return try decoder.decode(StoragePayload.self, from: data)
+        let payload = try decoder.decode(StoragePayload.self, from: data)
+        let migratedAccounts = Self.migratedAccounts(payload.accounts)
+        var activeMap = payload.activeConsumerAccountIDs
+        for account in migratedAccounts where account.planType == "consumer" {
+            if activeMap[account.serviceType.rawValue] == nil {
+                activeMap[account.serviceType.rawValue] = account.id
+            }
+        }
+        return StoragePayload(
+            accounts: migratedAccounts,
+            activeConsumerAccountIDs: activeMap
+        )
     }
 
     private static func defaultStorageURL(fileManager: FileManager) -> URL {
@@ -138,5 +150,23 @@ final class AccountStore {
         return appSupport
             .appendingPathComponent("UsageTool", isDirectory: true)
             .appendingPathComponent("accounts.json", isDirectory: false)
+    }
+
+    private static func migratedAccounts(_ accounts: [Account]) -> [Account] {
+        accounts.map { account in
+            guard account.serviceType == .antigravity, account.planType == nil else {
+                return account
+            }
+
+            var updated = account
+            updated.configuration[Account.ConfigurationKey.planType] = "consumer"
+            if updated.configuration[Account.ConfigurationKey.consumerEmail] == nil,
+               account.name.contains("@") {
+                updated.configuration[Account.ConfigurationKey.consumerEmail] = account.name
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+            }
+            return updated
+        }
     }
 }

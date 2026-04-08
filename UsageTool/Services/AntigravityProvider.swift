@@ -4,6 +4,13 @@ import SQLite3
 
 // MARK: - Internal types
 
+private struct AntigravityAuthState: Sendable {
+    let accessToken: String
+    let refreshToken: String?
+    let email: String?
+    let name: String?
+}
+
 private struct AntigravityAccount: Sendable {
     let email: String
     let isActive: Bool
@@ -33,26 +40,19 @@ private struct QuotaPool: Sendable {
 
 // MARK: - Provider
 
-struct AntigravityProvider: ServiceProvider {
+struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     let serviceType: ServiceType = .antigravity
 
-    private let dbURL: URL
-    private let keyURL: URL
+    private static let oauthClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    private static let oauthClientSecret = "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"
+    private static let userAgent = "antigravity/1.11.3 Darwin/arm64"
+
     private let stateDbURL: URL
     private let cloudCodeBaseURL: URL
     private let session: NetworkSession
     private let now: @Sendable () -> Date
 
     init(
-        dbURL: URL = URL(
-            fileURLWithPath: ("~/.antigravity-agent/cloud_accounts.db" as NSString)
-                .expandingTildeInPath
-        ),
-        keyURL: URL = URL(
-            fileURLWithPath: (
-                "~/Library/Application Support/Antigravity Manager/.mk" as NSString
-            ).expandingTildeInPath
-        ),
         stateDbURL: URL = URL(
             fileURLWithPath: (
                 "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb" as NSString
@@ -62,8 +62,6 @@ struct AntigravityProvider: ServiceProvider {
         session: NetworkSession = URLSession.shared,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
-        self.dbURL = dbURL
-        self.keyURL = keyURL
         self.stateDbURL = stateDbURL
         self.cloudCodeBaseURL = cloudCodeBaseURL
         self.session = session
@@ -71,25 +69,18 @@ struct AntigravityProvider: ServiceProvider {
     }
 
     func fetchUsage(account: Account, credential _: String) async throws -> UsageSnapshot {
-        let accounts: [AntigravityAccount]
-
-        // Primary path: read from Antigravity Manager's encrypted database.
-        if FileManager.default.fileExists(atPath: dbURL.path),
-           FileManager.default.fileExists(atPath: keyURL.path)
-        {
-            accounts = try readAccounts()
-        } else {
-            // Fallback path: call the cloudcode API directly using the Antigravity
-            // editor's stored access token.
-            accounts = try await readAccountsDirect()
-        }
+        let authState = try readAuthStateFromStateDb()
+        let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
         // Match this UsageTool account's name (email) to the corresponding
         // Antigravity database account.  Fall back to the active/first account
         // when no email matches, preserving existing single-account behavior.
         let target: AntigravityAccount
         if let byName = accounts.first(where: {
-            $0.email.localizedCaseInsensitiveCompare(account.name) == .orderedSame
+            let normalizedAccountName = normalizedIdentity(account.name)
+            let normalizedConfiguredEmail = normalizedIdentity(account.consumerEmail)
+            let normalizedCandidateEmail = normalizedIdentity($0.email)
+            return normalizedCandidateEmail == normalizedAccountName || normalizedCandidateEmail == normalizedConfiguredEmail
         }) {
             target = byName
         } else if let active = accounts.first(where: { $0.isActive }) ?? accounts.first {
@@ -126,114 +117,41 @@ struct AntigravityProvider: ServiceProvider {
             accountId: account.id,
             timestamp: timestamp,
             windows: windows,
-            tier: target.email,
+            tier: target.email.isEmpty ? authState.name ?? "Antigravity" : target.email,
             breakdown: breakdown.isEmpty ? nil : breakdown,
             isStale: false
         )
     }
 
     func validateCredentials(account _: Account, credential _: String) async throws -> Bool {
-        let hasManagerFiles = FileManager.default.fileExists(atPath: dbURL.path)
-            && FileManager.default.fileExists(atPath: keyURL.path)
-
-        if hasManagerFiles {
-            let accounts = try readAccounts()
-            return !accounts.isEmpty
-        }
-
-        // Without Manager, check if the Antigravity editor state exists.
         guard FileManager.default.fileExists(atPath: stateDbURL.path) else {
             throw ServiceProviderError.unavailable(
-                "Antigravity not found. Install Antigravity Manager or the Antigravity editor."
+                "Antigravity editor not found. Install the Antigravity editor and sign in."
             )
         }
 
-        // Try fetching — this will throw a meaningful error if the token is expired.
-        let accounts = try await readAccountsDirect()
+        let accounts = try await readAccountsDirect(authState: readAuthStateFromStateDb())
         return !accounts.isEmpty
     }
 
-    // MARK: - Manager path (encrypted SQLite)
-
-    private func readAccounts() throws -> [AntigravityAccount] {
-        let key = try readSymmetricKey()
-
-        var db: OpaquePointer?
-        let dbEncoded = dbURL.path
-            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? dbURL.path
-        let dbUri = "file:\(dbEncoded)?immutable=1"
-        guard sqlite3_open_v2(dbUri, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK else {
-            throw ServiceProviderError.unavailable("Could not open Antigravity database.")
+    func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
+        let authState = try readAuthStateFromStateDb()
+        guard let email = normalizedIdentity(authState.email) else {
+            return nil
         }
-        defer { sqlite3_close(db) }
-
-        var stmt: OpaquePointer?
-        let sql = "SELECT email, quota_json, is_active FROM accounts ORDER BY is_active DESC, last_used DESC"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            throw ServiceProviderError.unavailable("Could not query Antigravity database.")
-        }
-        defer { sqlite3_finalize(stmt) }
-
-        var accounts: [AntigravityAccount] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            guard let emailPtr = sqlite3_column_text(stmt, 0) else { continue }
-            let email = String(cString: emailPtr)
-            let isActive = sqlite3_column_int(stmt, 2) != 0
-
-            guard
-                let encPtr = sqlite3_column_text(stmt, 1),
-                let quotaJSON = try? decrypt(String(cString: encPtr), key: key),
-                let data = quotaJSON.data(using: .utf8),
-                let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let models = root["models"] as? [String: [String: Any]]
-            else { continue }
-
-            let pools = groupPools(from: models)
-            accounts.append(AntigravityAccount(email: email, isActive: isActive, pools: pools))
-        }
-
-        return accounts
-    }
-
-    private func readSymmetricKey() throws -> SymmetricKey {
-        guard let keyHex = try? String(contentsOf: keyURL, encoding: .utf8) else {
-            throw ServiceProviderError.unavailable("Could not read Antigravity key file.")
-        }
-        let trimmed = keyHex.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count == 64, let keyData = Data(hexString: trimmed) else {
-            throw ServiceProviderError.unavailable(
-                "Antigravity key file has unexpected format. Only the 32-byte hex file-based key is supported."
-            )
-        }
-        return SymmetricKey(data: keyData)
-    }
-
-    private func decrypt(_ encrypted: String, key: SymmetricKey) throws -> String {
-        let parts = encrypted.split(separator: ":", maxSplits: 2).map(String.init)
-        guard
-            parts.count == 3,
-            let ivData = Data(hexString: parts[0]),
-            let tagData = Data(hexString: parts[1]),
-            let ctData = Data(hexString: parts[2])
-        else {
-            throw ServiceProviderError.invalidPayload("Unexpected encrypted field format.")
-        }
-        let nonce = try AES.GCM.Nonce(data: ivData)
-        let sealedBox = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ctData, tag: tagData)
-        let plaintext = try AES.GCM.open(sealedBox, using: key)
-        return String(data: plaintext, encoding: .utf8) ?? ""
+        return ConsumerAccountIdentity(email: email, externalID: nil)
     }
 
     // MARK: - Direct path (cloudcode-pa API)
 
-    private func readAccountsDirect() async throws -> [AntigravityAccount] {
-        let accessToken = try readAccessTokenFromStateDb()
-        let models = try await fetchModelsFromAPI(accessToken: accessToken)
+    private func readAccountsDirect(authState: AntigravityAuthState) async throws -> [AntigravityAccount] {
+        let models = try await fetchModelsFromAPI(authState: authState)
         let pools = groupPools(from: models)
-        return [AntigravityAccount(email: "", isActive: true, pools: pools)]
+        let email = normalizedIdentity(authState.email) ?? ""
+        return [AntigravityAccount(email: email, isActive: true, pools: pools)]
     }
 
-    private func readAccessTokenFromStateDb() throws -> String {
+    private func readAuthStateFromStateDb() throws -> AntigravityAuthState {
         var db: OpaquePointer?
 
         // Use the immutable URI mode so we can read the database while Antigravity has
@@ -258,9 +176,7 @@ struct AntigravityProvider: ServiceProvider {
         }
         defer { sqlite3_finalize(stmt) }
 
-        guard sqlite3_step(stmt) == SQLITE_ROW,
-              let valuePtr = sqlite3_column_text(stmt, 0)
-        else {
+        guard sqlite3_step(stmt) == SQLITE_ROW, let valuePtr = sqlite3_column_text(stmt, 0) else {
             throw ServiceProviderError.unavailable(
                 "Antigravity editor has no auth status. Open Antigravity and sign in."
             )
@@ -269,32 +185,78 @@ struct AntigravityProvider: ServiceProvider {
         let json = String(cString: valuePtr)
         guard
             let data = json.data(using: .utf8),
-            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let apiKey = root["apiKey"] as? String,
-            !apiKey.isEmpty
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
             throw ServiceProviderError.unavailable(
                 "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
             )
         }
 
-        return apiKey
+        let apiKey = ProviderSupport.string(root["apiKey"])
+            ?? ProviderSupport.string(root["accessToken"])
+            ?? ProviderSupport.string(root["token"])
+
+        let fallbackAuthState = AntigravityAuthState(
+            accessToken: apiKey ?? "",
+            refreshToken: nil,
+            email: ProviderSupport.string(root["email"]),
+            name: ProviderSupport.string(root["name"])
+        )
+
+        if let unifiedState = try? readUnifiedOAuthState(from: db),
+           !unifiedState.accessToken.isEmpty {
+            return AntigravityAuthState(
+                accessToken: unifiedState.accessToken,
+                refreshToken: unifiedState.refreshToken,
+                email: fallbackAuthState.email,
+                name: fallbackAuthState.name
+            )
+        }
+
+        guard let apiKey, !apiKey.isEmpty else {
+            throw ServiceProviderError.unavailable(
+                "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
+            )
+        }
+
+        return fallbackAuthState
+    }
+
+    private func normalizedIdentity(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func fetchModelsFromAPI(authState: AntigravityAuthState) async throws -> [String: [String: Any]] {
+        do {
+            return try await fetchModelsFromAPI(accessToken: authState.accessToken)
+        } catch ServiceProviderError.unauthorized {
+            guard let refreshToken = authState.refreshToken else {
+                throw ServiceProviderError.unauthorized
+            }
+            let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
+            return try await fetchModelsFromAPI(accessToken: refreshed)
+        }
     }
 
     private func fetchModelsFromAPI(accessToken: String) async throws -> [String: [String: Any]] {
+        let project = try await fetchProject(accessToken: accessToken)
         let url = cloudCodeBaseURL.appending(path: "/v1internal:fetchAvailableModels")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data("{}".utf8)
+        let body = project.map { ["project": $0] } ?? [:]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let payload = try await ProviderSupport.performJSONRequest(session: session, request: request)
         let root = try ProviderSupport.dictionary(payload, context: "Antigravity fetchAvailableModels")
 
         // The API returns either an "availableModels" array or a "models" object.
         if let modelsObject = root["models"] as? [String: [String: Any]] {
-            return modelsObject
+            return parseModelsObject(modelsObject)
         }
 
         if let modelsArray = root["availableModels"] as? [[String: Any]] {
@@ -306,34 +268,178 @@ struct AntigravityProvider: ServiceProvider {
         )
     }
 
+    private func fetchProject(accessToken: String) async throws -> String? {
+        let url = cloudCodeBaseURL.appending(path: "/v1internal:loadCodeAssist")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: ["metadata": ["ideType": "ANTIGRAVITY"]]
+        )
+
+        let payload = try await ProviderSupport.performJSONRequest(session: session, request: request)
+        let root = try ProviderSupport.dictionary(payload, context: "Antigravity loadCodeAssist")
+        return ProviderSupport.string(root["cloudaicompanionProject"])
+    }
+
+    private func refreshAccessToken(refreshToken: String) async throws -> String {
+        let requestBody = [
+            "client_id": Self.oauthClientID,
+            "client_secret": Self.oauthClientSecret,
+            "refresh_token": refreshToken,
+            "grant_type": "refresh_token"
+        ]
+        var components = URLComponents(string: "https://oauth2.googleapis.com/token")
+        components?.queryItems = requestBody.map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let body = components?.percentEncodedQuery?.data(using: .utf8),
+              let url = URL(string: "https://oauth2.googleapis.com/token") else {
+            throw ServiceProviderError.invalidPayload("Could not build Antigravity OAuth refresh request.")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        let payload = try await ProviderSupport.performJSONRequest(session: session, request: request)
+        let root = try ProviderSupport.dictionary(payload, context: "Antigravity OAuth refresh")
+        guard let accessToken = ProviderSupport.string(root["access_token"]), !accessToken.isEmpty else {
+            throw ServiceProviderError.invalidPayload("Antigravity OAuth refresh did not return an access token.")
+        }
+        return accessToken
+    }
+
+    private func readUnifiedOAuthState(from db: OpaquePointer?) throws -> (accessToken: String, refreshToken: String?)? {
+        var stmt: OpaquePointer?
+        let sql = "SELECT value FROM ItemTable WHERE key = 'antigravityUnifiedStateSync.oauthToken'"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            return nil
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        guard sqlite3_step(stmt) == SQLITE_ROW, let valuePtr = sqlite3_column_text(stmt, 0) else {
+            return nil
+        }
+
+        let encoded = String(cString: valuePtr)
+        guard let data = Data(base64Encoded: encoded),
+              let inner = protobufField(1, in: data),
+              let inner2 = protobufField(2, in: inner),
+              let oauthInfoB64Data = protobufField(1, in: inner2),
+              let oauthInfoB64 = String(data: oauthInfoB64Data, encoding: .utf8),
+              let oauthInfo = Data(base64Encoded: oauthInfoB64),
+              let accessTokenData = protobufField(1, in: oauthInfo),
+              let accessToken = String(data: accessTokenData, encoding: .utf8)
+        else {
+            return nil
+        }
+
+        let refreshToken = protobufField(3, in: oauthInfo).flatMap { String(data: $0, encoding: .utf8) }
+        return (accessToken, refreshToken)
+    }
+
+    private func protobufField(_ fieldNumber: Int, in data: Data) -> Data? {
+        var offset = 0
+        while offset < data.count {
+            guard let (tag, nextOffset) = readVarint(in: data, offset: offset) else { return nil }
+            let wireType = Int(tag & 0b111)
+            let currentField = Int(tag >> 3)
+            offset = nextOffset
+
+            switch wireType {
+            case 0:
+                guard let (_, varintEnd) = readVarint(in: data, offset: offset) else { return nil }
+                offset = varintEnd
+            case 2:
+                guard let (length, payloadStart) = readVarint(in: data, offset: offset) else { return nil }
+                let payloadEnd = payloadStart + Int(length)
+                guard payloadEnd <= data.count else { return nil }
+                if currentField == fieldNumber {
+                    return data.subdata(in: payloadStart..<payloadEnd)
+                }
+                offset = payloadEnd
+            case 1:
+                offset += 8
+            case 5:
+                offset += 4
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private func readVarint(in data: Data, offset: Int) -> (UInt64, Int)? {
+        var value: UInt64 = 0
+        var shift: UInt64 = 0
+        var cursor = offset
+
+        while cursor < data.count {
+            let byte = data[cursor]
+            value |= UInt64(byte & 0x7F) << shift
+            cursor += 1
+            if byte & 0x80 == 0 {
+                return (value, cursor)
+            }
+            shift += 7
+        }
+
+        return nil
+    }
+
     private func parseModelsArray(_ array: [[String: Any]]) -> [String: [String: Any]] {
         var result: [String: [String: Any]] = [:]
         for model in array {
             guard let name = ProviderSupport.string(model["modelName"] ?? model["name"]) else {
                 continue
             }
-            var info: [String: Any] = [:]
-
-            // Map API fields to the internal format used by groupPools().
-            if let quota = model["quotaInfo"] as? [String: Any] {
-                if let fraction = ProviderSupport.double(quota["remainingFraction"]) {
-                    info["percentage"] = Int(fraction * 100)
-                }
-                if let resetTime = ProviderSupport.string(quota["resetTime"] ?? quota["reset_time"]) {
-                    info["resetTime"] = resetTime
-                }
-            } else {
-                if let fraction = ProviderSupport.double(model["remainingFraction"] ?? model["remaining_fraction"]) {
-                    info["percentage"] = Int(fraction * 100)
-                }
-                if let resetTime = ProviderSupport.string(model["resetTime"] ?? model["reset_time"]) {
-                    info["resetTime"] = resetTime
-                }
-            }
-
-            result[name] = info
+            result[name] = normalizedModelInfo(from: model)
         }
         return result
+    }
+
+    private func parseModelsObject(_ models: [String: [String: Any]]) -> [String: [String: Any]] {
+        var result: [String: [String: Any]] = [:]
+        for (name, info) in models {
+            result[name] = normalizedModelInfo(from: info)
+        }
+        return result
+    }
+
+    private func normalizedModelInfo(from raw: [String: Any]) -> [String: Any] {
+        var info: [String: Any] = [:]
+
+        // Map API fields to the internal format used by groupPools().
+        if let quota = raw["quotaInfo"] as? [String: Any] {
+            if let fraction = ProviderSupport.double(quota["remainingFraction"]) {
+                info["percentage"] = Int(fraction * 100)
+            }
+            if let resetTime = ProviderSupport.string(quota["resetTime"] ?? quota["reset_time"]) {
+                info["resetTime"] = resetTime
+                // Antigravity sometimes omits remainingFraction when a quota bucket is
+                // exhausted but still reports the next reset time.
+                if info["percentage"] == nil {
+                    info["percentage"] = 0
+                }
+            }
+        } else {
+            if let fraction = ProviderSupport.double(raw["remainingFraction"] ?? raw["remaining_fraction"]) {
+                info["percentage"] = Int(fraction * 100)
+            } else if let percentage = ProviderSupport.int(raw["percentage"]) {
+                info["percentage"] = percentage
+            }
+            if let resetTime = ProviderSupport.string(raw["resetTime"] ?? raw["reset_time"]) {
+                info["resetTime"] = resetTime
+            }
+        }
+
+        if let displayName = ProviderSupport.string(raw["displayName"] ?? raw["display_name"]) {
+            info["displayName"] = displayName
+        }
+
+        return info
     }
 
     // MARK: - Pool grouping
@@ -372,22 +478,5 @@ struct AntigravityProvider: ServiceProvider {
                 modelNames: entries.map(\.name).sorted()
             )
         }
-    }
-}
-
-// MARK: - Helpers
-
-private extension Data {
-    init?(hexString: String) {
-        guard hexString.count % 2 == 0 else { return nil }
-        var data = Data(capacity: hexString.count / 2)
-        var index = hexString.startIndex
-        while index < hexString.endIndex {
-            let next = hexString.index(index, offsetBy: 2)
-            guard let byte = UInt8(hexString[index ..< next], radix: 16) else { return nil }
-            data.append(byte)
-            index = next
-        }
-        self = data
     }
 }

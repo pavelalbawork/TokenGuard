@@ -28,7 +28,7 @@ final class AccountStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempDirectory) }
 
         let storageURL = tempDirectory.appendingPathComponent("accounts.json")
-        let originalAccount = Account(name: "Gemini", serviceType: .gemini, credentialRef: "gemini-ref")
+        let originalAccount = Account(name: "Antigravity", serviceType: .antigravity, credentialRef: "antigravity-ref")
         let encoded = try JSONEncoder().encode([originalAccount])
         try encoded.write(to: storageURL)
 
@@ -42,6 +42,29 @@ final class AccountStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.update(updatedAccount))
         XCTAssertEqual(store.accounts.first?.configuration[Account.ConfigurationKey.googleRequestLimit], nil)
     }
+
+    func testMigratesLegacyAntigravityAccountsToConsumerPlan() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let legacyAccount = Account(
+            name: "pavelalbawork@gmail.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-ref"
+        )
+        let encoded = try JSONEncoder().encode([legacyAccount])
+        try encoded.write(to: storageURL)
+
+        let store = AccountStore(storageURL: storageURL)
+
+        XCTAssertEqual(store.accounts.first?.planType, "consumer")
+        XCTAssertEqual(store.accounts.first?.consumerEmail, "pavelalbawork@gmail.com")
+        XCTAssertEqual(store.activeConsumerAccountID(for: .antigravity), legacyAccount.id)
+    }
+
     private func makeDirectoryReadOnly(_ url: URL) throws {
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: url.path)
     }

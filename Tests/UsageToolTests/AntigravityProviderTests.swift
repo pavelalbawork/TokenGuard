@@ -91,8 +91,6 @@ final class AntigravityProviderTests: XCTestCase {
         URLProtocolMock.requestHandler = { [apiURL, responseData] _ in antigravityHttpOK(data: responseData, for: apiURL) }
 
         let provider = AntigravityProvider(
-            dbURL: nonExistentURL(),
-            keyURL: nonExistentURL(),
             stateDbURL: stateDbURL,
             cloudCodeBaseURL: apiURL,
             session: session
@@ -133,8 +131,20 @@ final class AntigravityProviderTests: XCTestCase {
 
         let response: [String: Any] = [
             "models": [
-                "claude-sonnet-4-6": ["percentage": 75, "resetTime": "2026-04-07T00:00:00Z"],
-                "gemini-3-flash": ["percentage": 50, "resetTime": "2026-04-07T00:00:00Z"]
+                "claude-sonnet-4-6": [
+                    "displayName": "Claude Sonnet 4.6",
+                    "quotaInfo": [
+                        "remainingFraction": 0.75,
+                        "resetTime": "2026-04-07T00:00:00Z"
+                    ]
+                ],
+                "gemini-3-flash": [
+                    "displayName": "Gemini 3 Flash",
+                    "quotaInfo": [
+                        "remainingFraction": 0.5,
+                        "resetTime": "2026-04-07T00:00:00Z"
+                    ]
+                ]
             ]
         ]
 
@@ -143,8 +153,6 @@ final class AntigravityProviderTests: XCTestCase {
         URLProtocolMock.requestHandler = { [apiURL, responseData] _ in antigravityHttpOK(data: responseData, for: apiURL) }
 
         let provider = AntigravityProvider(
-            dbURL: nonExistentURL(),
-            keyURL: nonExistentURL(),
             stateDbURL: stateDbURL,
             cloudCodeBaseURL: apiURL,
             session: session
@@ -166,6 +174,83 @@ final class AntigravityProviderTests: XCTestCase {
         XCTAssertEqual(flashWindow?.used ?? -1, 50, accuracy: 1)
     }
 
+    func testDirectPathParsesLegacyModelsObjectPercentageFormat() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeStateDb(in: tempDir, apiKey: "ya29.testtoken")
+        let apiURL = URL(string: "https://cloudcode-pa.googleapis.com")!
+
+        let response: [String: Any] = [
+            "models": [
+                "claude-sonnet-4-6": ["percentage": 75, "resetTime": "2026-04-07T00:00:00Z"],
+                "gemini-3-flash": ["percentage": 50, "resetTime": "2026-04-07T00:00:00Z"]
+            ]
+        ]
+
+        let session = makeMockedSession()
+        let responseData = antigravityJsonData(response)
+        URLProtocolMock.requestHandler = { [apiURL, responseData] _ in antigravityHttpOK(data: responseData, for: apiURL) }
+
+        let provider = AntigravityProvider(
+            stateDbURL: stateDbURL,
+            cloudCodeBaseURL: apiURL,
+            session: session
+        )
+
+        let account = Account(name: "Test", serviceType: .antigravity, credentialRef: "ref", configuration: [:])
+        let snapshot = try await provider.fetchUsage(account: account, credential: "")
+
+        XCTAssertEqual(snapshot.windows.first { $0.label == "Anthropic (Claude)" }?.used ?? -1, 25, accuracy: 1)
+        XCTAssertEqual(snapshot.windows.first { $0.label == "Gemini Flash" }?.used ?? -1, 50, accuracy: 1)
+    }
+
+    func testDirectPathTreatsMissingRemainingFractionWithResetTimeAsExhausted() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeStateDb(in: tempDir, apiKey: "ya29.testtoken")
+        let apiURL = URL(string: "https://cloudcode-pa.googleapis.com")!
+
+        let response: [String: Any] = [
+            "models": [
+                "gemini-3.1-pro-high": [
+                    "displayName": "Gemini 3.1 Pro (High)",
+                    "quotaInfo": [
+                        "resetTime": "2026-04-07T00:00:00Z"
+                    ]
+                ],
+                "gemini-3-flash": [
+                    "displayName": "Gemini 3 Flash",
+                    "quotaInfo": [
+                        "remainingFraction": 1.0,
+                        "resetTime": "2026-04-07T00:00:00Z"
+                    ]
+                ]
+            ]
+        ]
+
+        let session = makeMockedSession()
+        let responseData = antigravityJsonData(response)
+        URLProtocolMock.requestHandler = { [apiURL, responseData] _ in antigravityHttpOK(data: responseData, for: apiURL) }
+
+        let provider = AntigravityProvider(
+            stateDbURL: stateDbURL,
+            cloudCodeBaseURL: apiURL,
+            session: session
+        )
+
+        let account = Account(name: "Test", serviceType: .antigravity, credentialRef: "ref", configuration: [:])
+        let snapshot = try await provider.fetchUsage(account: account, credential: "")
+
+        XCTAssertEqual(snapshot.windows.first { $0.label == "Gemini Pro" }?.used ?? -1, 100, accuracy: 1)
+        XCTAssertEqual(snapshot.windows.first { $0.label == "Gemini Flash" }?.used ?? -1, 0, accuracy: 1)
+    }
+
     // MARK: - Direct path: 401 propagates as unauthorized
 
     func testDirectPathThrowsOnUnauthorized() async throws {
@@ -185,8 +270,6 @@ final class AntigravityProviderTests: XCTestCase {
         }
 
         let provider = AntigravityProvider(
-            dbURL: nonExistentURL(),
-            keyURL: nonExistentURL(),
             stateDbURL: stateDbURL,
             cloudCodeBaseURL: apiURL,
             session: session
@@ -207,8 +290,6 @@ final class AntigravityProviderTests: XCTestCase {
 
     func testDirectPathThrowsWhenNoDatabaseExists() async throws {
         let provider = AntigravityProvider(
-            dbURL: nonExistentURL(),
-            keyURL: nonExistentURL(),
             stateDbURL: nonExistentURL()
         )
 
@@ -244,8 +325,6 @@ final class AntigravityProviderTests: XCTestCase {
         URLProtocolMock.requestHandler = { [apiURL, responseData] _ in antigravityHttpOK(data: responseData, for: apiURL) }
 
         let provider = AntigravityProvider(
-            dbURL: nonExistentURL(),
-            keyURL: nonExistentURL(),
             stateDbURL: stateDbURL,
             cloudCodeBaseURL: apiURL,
             session: session
@@ -257,5 +336,20 @@ final class AntigravityProviderTests: XCTestCase {
         let breakdownLabels = snapshot.breakdown?.map(\.label) ?? []
         XCTAssertTrue(breakdownLabels.contains("claude-sonnet-4-6"))
         XCTAssertTrue(breakdownLabels.contains("claude-opus-4-6"))
+    }
+
+    func testCurrentConsumerIdentityReadsEmailFromAuthStatus() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeStateDb(in: tempDir, apiKey: "ya29.testidentity")
+        let provider = AntigravityProvider(stateDbURL: stateDbURL)
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "test@example.com")
+        XCTAssertNil(identity?.externalID)
     }
 }
