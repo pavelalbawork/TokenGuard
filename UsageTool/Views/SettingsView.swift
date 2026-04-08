@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("globalRefreshIntervalMins") private var refreshIntervalMins: Int = 15
     
     @State private var orderedServices: [ServiceType] = []
+    @State private var launchAtLoginError: String?
 
     var body: some View {
         let theme = themeManager.currentTheme
@@ -34,11 +35,24 @@ struct SettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
                 .onChange(of: launchAtLogin) { _, newValue in
-                    if newValue {
-                        try? SMAppService.mainApp.register()
-                    } else {
-                        try? SMAppService.mainApp.unregister()
+                    launchAtLoginError = nil
+                    do {
+                        if newValue {
+                            try SMAppService.mainApp.register()
+                        } else {
+                            try SMAppService.mainApp.unregister()
+                        }
+                    } catch {
+                        launchAtLoginError = error.localizedDescription
+                        launchAtLogin = !newValue
                     }
+                }
+                
+                if let error = launchAtLoginError {
+                    Text(error)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.error)
+                        .padding(.horizontal, 4)
                 }
             }
             
@@ -47,7 +61,7 @@ struct SettingsView: View {
                 sectionHeader("Data", theme: theme)
                 
                 HStack {
-                    Text("Background Refresh")
+                    Text("Refresh Interval")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(theme.textPrimary)
                     Spacer()

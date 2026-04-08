@@ -3,6 +3,7 @@
 .deriveddata/
 .relaykit/
 .swiftpm/
+dist/
 DerivedData/
 xcuserdata/
 *.xcuserstate

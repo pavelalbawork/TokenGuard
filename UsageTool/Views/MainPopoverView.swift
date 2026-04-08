@@ -3,7 +3,6 @@ import SwiftUI
 enum NavigationTab: String, CaseIterable {
     case usage = "USAGE"
     case limits = "LIMITS"
-    case history = "HISTORY"
 }
 
 struct MainPopoverView: View {
@@ -178,8 +177,6 @@ struct MainPopoverView: View {
                                 }
                             } else if selectedTab == .limits {
                                 LimitsView()
-                            } else if selectedTab == .history {
-                                HistoryView()
                             }
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -590,9 +587,9 @@ struct LimitsView: View {
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                                     .foregroundStyle(theme.secondaryAccent)
                             } else {
-                                Text("UNLIMITED")
+                                Text("UNKNOWN")
                                     .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(theme.tertiaryAccent)
+                                    .foregroundStyle(theme.textSecondary)
                             }
                         }
                         .padding(8)
@@ -600,7 +597,7 @@ struct LimitsView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 } else {
-                    Text("Fetching capacities for \(account.name)...")
+                    Text("Fetching capacities...")
                         .font(.system(size: 9, weight: .light))
                         .foregroundStyle(theme.textSecondary.opacity(0.5))
                 }
@@ -613,164 +610,5 @@ struct LimitsView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(theme.border, lineWidth: 1)
         )
-    }
-}
-
-// MARK: - HISTORY VIEW FRONTEND
-
-struct HistoryView: View {
-    @Environment(UsagePollingEngine.self) private var pollingEngine
-    @Environment(ThemeManager.self) private var themeManager
-    @Environment(AccountStore.self) private var accountStore
-
-    // Mock recent events based on active data and resets
-    private var simulatedEvents: [HistoryEvent] {
-        var events: [HistoryEvent] = []
-        for account in accountStore.accounts {
-            guard let state = pollingEngine.accountStates[account.id], let snapshot = state.snapshot else { continue }
-            
-            // Add a "Checked" event
-            events.append(HistoryEvent(
-                date: snapshot.timestamp,
-                title: "Usage snapshot captured",
-                accountName: account.name,
-                serviceType: account.serviceType,
-                type: .check
-            ))
-            
-            for window in snapshot.windows {
-                if let percent = window.percentUsed, percent < 0.20 {
-                    // Under 20% remaining
-                    events.append(HistoryEvent(
-                        date: snapshot.timestamp.addingTimeInterval(-3600), // fuzzy past
-                        title: "\(window.label ?? window.windowType.defaultLabel) approaching cap",
-                        accountName: account.name,
-                        serviceType: account.serviceType,
-                        type: .warning
-                    ))
-                }
-                
-                if let limit = window.limit, window.used >= limit {
-                    events.append(HistoryEvent(
-                        date: snapshot.timestamp.addingTimeInterval(-1200),
-                        title: "Hard limit reached",
-                        accountName: account.name,
-                        serviceType: account.serviceType,
-                        type: .critical
-                    ))
-                }
-            }
-        }
-        return events.sorted(by: { $0.date > $1.date }) // Newest first
-    }
-
-    var body: some View {
-        let theme = themeManager.currentTheme
-        let events = simulatedEvents
-
-        VStack(alignment: .leading, spacing: 20) {
-            // Header
-            VStack(alignment: .leading, spacing: 4) {
-                Text("EVENT LOG")
-                    .font(.system(size: 14, weight: .black))
-                    .tracking(1.0)
-                    .foregroundStyle(theme.textPrimary)
-                
-                Text("Recent capacity warnings and sync events.")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .padding(.horizontal, 16)
-            
-            if events.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 24, weight: .ultraLight))
-                        .foregroundStyle(theme.textSecondary.opacity(0.5))
-                    Text("No recent events")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(events) { event in
-                            HStack(alignment: .top, spacing: 12) {
-                                // Timeline indicator
-                                VStack(spacing: 0) {
-                                    Circle()
-                                        .fill(event.color(theme: theme))
-                                        .frame(width: 8, height: 8)
-                                        .padding(.top, 4)
-                                    
-                                    Rectangle()
-                                        .fill(theme.border)
-                                        .frame(width: 1)
-                                        .padding(.vertical, 4)
-                                }
-                                
-                                // Event Content
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Image(systemName: event.serviceType.iconName)
-                                            .font(.system(size: 9))
-                                            .foregroundStyle(event.serviceType.tintColor(for: theme))
-                                        
-                                        Text(event.accountName.uppercased())
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundStyle(theme.textSecondary)
-                                        
-                                        Spacer()
-                                        
-                                        Text(timeAgo(for: event.date))
-                                            .font(.system(size: 8, weight: .medium, design: .monospaced))
-                                            .foregroundStyle(theme.textSecondary.opacity(0.6))
-                                    }
-                                    
-                                    Text(event.title)
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(theme.textPrimary)
-                                }
-                                .padding(.bottom, 8)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                }
-            }
-        }
-        .padding(.top, 16)
-    }
-    
-    private func timeAgo(for date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-// MARK: - Mock Data Models
-
-fileprivate struct HistoryEvent: Identifiable {
-    let id = UUID()
-    let date: Date
-    let title: String
-    let accountName: String
-    let serviceType: ServiceType
-    let type: EventType
-    
-    enum EventType {
-        case check
-        case warning
-        case critical
-    }
-    
-    func color(theme: Theme) -> Color {
-        switch type {
-        case .check: return theme.tertiaryAccent.opacity(0.6)
-        case .warning: return theme.secondaryAccent
-        case .critical: return theme.error
-        }
     }
 }

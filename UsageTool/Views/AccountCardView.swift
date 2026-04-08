@@ -17,7 +17,7 @@ struct AccountCardView: View {
                 VStack(alignment: .leading, spacing: 14) {
                 if let snapshot = state?.snapshot {
                     VStack(spacing: 14) {
-                        ForEach(snapshot.windows) { window in
+                        ForEach(sortedWindows(for: snapshot.windows)) { window in
                             UsageWindowRow(window: window)
                         }
                     }
@@ -103,6 +103,22 @@ struct AccountCardView: View {
         if message.contains("unexpected format") { return "Unsupported key format" }
         if message.contains("provided credentials were rejected") { return "Antigravity sign-in needs refresh" }
         return message
+    }
+
+    private func sortedWindows(for windows: [UsageWindow]) -> [UsageWindow] {
+        if account.serviceType == .antigravity {
+            let order: [String: Int] = [
+                "Anthropic (Claude)": 0,
+                "Gemini Pro": 1,
+                "Gemini Flash": 2
+            ]
+            return windows.sorted { a, b in
+                let indexA = order[a.label ?? ""] ?? 99
+                let indexB = order[b.label ?? ""] ?? 99
+                return indexA < indexB
+            }
+        }
+        return windows
     }
 }
 

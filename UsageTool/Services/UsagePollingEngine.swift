@@ -197,6 +197,17 @@ final class UsagePollingEngine {
         }
     }
 
+    func deleteAccount(_ account: Account) throws {
+        try accountStore.remove(accountID: account.id)
+
+        if !account.credentialRef.isEmpty {
+            try keychainManager.deleteSecret(reference: account.credentialRef)
+        }
+
+        try snapshotCache.remove(accountID: account.id)
+        accountStates.removeValue(forKey: account.id)
+    }
+
     private func apply(result: Result<UsageSnapshot, Error>, to accountID: UUID) {
         var updatedStates = accountStates
         var state = updatedStates[accountID] ?? AccountRefreshState()
@@ -356,23 +367,13 @@ final class UsagePollingEngine {
             $0.isEnabled && $0.serviceType == .codex && $0.planType == "consumer"
         }
 
-        NSLog("[CodexSync] liveState.identity=%@ status=%@ accounts=%d",
-              liveState.identity?.email ?? "nil",
-              "\(liveState.status)",
-              codexAccounts.count)
-
         guard !codexAccounts.isEmpty else { return }
 
         if codexAccounts.count > 1,
            let identity = liveState.identity,
            let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
-            NSLog("[CodexSync] matched account: %@ id=%@", matchedAccount.name, matchedAccount.id.uuidString)
             let previousActiveID = accountStore.activeConsumerAccountID(for: .codex)
-            NSLog("[CodexSync] previousActiveID=%@ matchedID=%@",
-                  previousActiveID?.uuidString ?? "nil",
-                  matchedAccount.id.uuidString)
             if previousActiveID != matchedAccount.id {
-                NSLog("[CodexSync] SWITCHING active account to %@", matchedAccount.name)
                 try? accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
 
                 // Keep the old account's snapshot (as stale) so the UI can
@@ -400,8 +401,6 @@ final class UsagePollingEngine {
                     updatedStates[previousActiveID] = oldState
                     accountStates = updatedStates
                 }
-            } else {
-                NSLog("[CodexSync] already on correct account")
             }
 
             let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)

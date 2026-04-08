@@ -169,11 +169,13 @@ struct ServiceSectionView: View {
 
                 Button("Delete", role: .destructive) {
                     NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                    do {
-                        try accountStore.remove(accountID: account.id)
-                        accountToDelete = nil
-                    } catch {
-                        deleteErrorMessage = error.localizedDescription
+                    Task {
+                        do {
+                            try pollingEngine.deleteAccount(account)
+                            accountToDelete = nil
+                        } catch {
+                            deleteErrorMessage = error.localizedDescription
+                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)

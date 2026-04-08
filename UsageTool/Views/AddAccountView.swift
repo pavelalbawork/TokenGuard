@@ -77,7 +77,7 @@ struct InlineAddAccountView: View {
                             Image(systemName: "info.circle.fill")
                                 .foregroundStyle(theme.secondaryAccent)
                                 .font(.system(size: 10))
-                            Text("This will auto-detect your local active CLI logins.")
+                            Text("Relies on local provider state. Ensure the provider CLI/app is already installed and signed in.")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(theme.textSecondary.opacity(0.8))
                         }
@@ -171,7 +171,8 @@ struct InlineAddAccountView: View {
             } catch {
                 await MainActor.run {
                     isSaving = false
-                    statusMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    let errorDesc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    statusMessage = "Unable to verify local state. Ensure CLI is authenticated. (\(errorDesc))"
                 }
             }
         }
