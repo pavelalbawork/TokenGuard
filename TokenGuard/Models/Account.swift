@@ -7,9 +7,9 @@ enum ServiceType: String, Codable, CaseIterable, Sendable {
 
     var iconName: String {
         switch self {
-        case .claude: return "brain.head.profile"
-        case .codex: return "chevron.left.forwardslash.chevron.right"
-        case .antigravity: return "location.north.fill"
+        case .claude: return "asterisk"
+        case .codex: return "terminal"
+        case .antigravity: return "ellipsis"
         }
     }
 }
@@ -60,6 +60,7 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
 
     let id: UUID
     var name: String
+    var alias: String?
     var serviceType: ServiceType
     var credentialRef: String
     var isEnabled: Bool
@@ -68,6 +69,7 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
     init(
         id: UUID = UUID(),
         name: String,
+        alias: String? = nil,
         serviceType: ServiceType,
         credentialRef: String,
         isEnabled: Bool = true,
@@ -75,10 +77,15 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
     ) {
         self.id = id
         self.name = name
+        self.alias = alias
         self.serviceType = serviceType
         self.credentialRef = credentialRef
         self.isEnabled = isEnabled
         self.configuration = configuration
+    }
+
+    var displayName: String {
+        alias?.isEmpty == false ? alias! : name
     }
 
     func configurationValue(for key: String) -> String? {

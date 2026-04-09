@@ -4,8 +4,6 @@ struct ServiceSectionView: View {
     let serviceType: ServiceType
     let accounts: [Account]
 
-    @State private var accountToDelete: Account?
-    @State private var deleteErrorMessage: String?
     @Environment(AccountStore.self) private var accountStore
     @Environment(ThemeManager.self) private var themeManager
     @Environment(UsagePollingEngine.self) private var pollingEngine
@@ -31,18 +29,6 @@ struct ServiceSectionView: View {
 
                 // Tier / LIVE badges for single-account case
                 if accounts.count == 1, let account = accounts.first {
-                    let state = pollingEngine.accountStates[account.id]
-                    if let tier = state?.snapshot?.tier {
-                        Text(tier)
-                            .font(.system(size: 8, weight: .bold))
-                            .textCase(.uppercase)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(theme.primaryAccent.opacity(0.1), in: .rect(cornerRadius: 3))
-                            .foregroundStyle(theme.primaryAccent)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
                     if activeConsumerAccountId == account.id {
                         Text("LIVE")
                             .font(.system(size: 8, weight: .bold))
@@ -73,7 +59,7 @@ struct ServiceSectionView: View {
                                 .font(.system(size: 9, weight: .regular))
                                 .foregroundStyle(serviceType.tintColor(for: theme))
 
-                            Text(account.name.uppercased())
+                            Text(account.displayName.uppercased())
                                 .font(.system(size: 8, weight: .black))
                                 .tracking(0.5)
                                 .foregroundStyle(theme.textSecondary)
@@ -82,11 +68,13 @@ struct ServiceSectionView: View {
 
                             if activeConsumerAccountId == account.id {
                                 Text("LIVE")
-                                    .font(.system(size: 7, weight: .bold))
-                                    .padding(.horizontal, 3)
-                                    .padding(.vertical, 1)
-                                    .background(serviceType.tintColor(for: theme).opacity(0.15), in: .rect(cornerRadius: 2))
+                                    .font(.system(size: 8, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(serviceType.tintColor(for: theme).opacity(0.12), in: .rect(cornerRadius: 3))
                                     .foregroundStyle(serviceType.tintColor(for: theme))
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
                             }
 
                             Spacer()
@@ -96,17 +84,6 @@ struct ServiceSectionView: View {
                     accountCard(account: account, isLive: activeConsumerAccountId == account.id, theme: theme)
                 }
             }
-
-            if let accountToDelete {
-                deleteConfirmation(account: accountToDelete, theme: theme)
-            }
-
-            if let deleteErrorMessage {
-                Text(deleteErrorMessage)
-                    .font(.system(size: 8, weight: .bold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(theme.error.opacity(0.85))
-            }
         }
     }
 
@@ -115,10 +92,6 @@ struct ServiceSectionView: View {
     @ViewBuilder
     private func accountCard(account: Account, isLive: Bool, theme: Theme) -> some View {
         AccountCardView(account: account)
-            .overlay(alignment: .topTrailing) {
-                deleteButton(for: account, theme: theme)
-                    .offset(x: 6, y: -6)
-            }
     }
 
     @ViewBuilder
@@ -128,7 +101,7 @@ struct ServiceSectionView: View {
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(serviceType.tintColor(for: theme))
 
-            Text(account.name.uppercased())
+            Text(account.displayName.uppercased())
                 .font(.system(size: 8, weight: .black))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
@@ -137,55 +110,8 @@ struct ServiceSectionView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(theme.surfaceContainerHigh.opacity(0.3))
+        .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border, lineWidth: 1))
-    }
-
-    @ViewBuilder
-    private func deleteButton(for account: Account, theme: Theme) -> some View {
-        HoverableDeleteButton(theme: theme) {
-            deleteErrorMessage = nil
-            accountToDelete = account
-        }
-    }
-
-    @ViewBuilder
-    private func deleteConfirmation(account: Account, theme: Theme) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Remove \(account.name)?")
-                .font(.system(size: 10, weight: .bold))
-                .textCase(.uppercase)
-                .foregroundStyle(theme.textPrimary)
-
-            Text("This removes the saved account and its last known state.")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(theme.textSecondary)
-
-            HStack(spacing: 8) {
-                Button("Cancel") {
-                    accountToDelete = nil
-                }
-                .buttonStyle(.bordered)
-
-                Button("Delete", role: .destructive) {
-                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                    Task {
-                        do {
-                            try pollingEngine.deleteAccount(account)
-                            accountToDelete = nil
-                        } catch {
-                            deleteErrorMessage = error.localizedDescription
-                        }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.surfaceContainerHigh.opacity(0.45))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     @ViewBuilder
@@ -221,28 +147,6 @@ struct ServiceSectionView: View {
             return theme.secondaryAccent
         case .error:
             return theme.error
-        }
-    }
-}
-
-struct HoverableDeleteButton: View {
-    let theme: Theme
-    let action: () -> Void
-    
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 14))
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(theme.backgroundMain, isHovered ? theme.error : theme.textSecondary.opacity(0.4))
-                .scaleEffect(isHovered ? 1.15 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
         }
     }
 }

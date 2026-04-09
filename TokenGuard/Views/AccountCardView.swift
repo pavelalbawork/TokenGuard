@@ -130,12 +130,12 @@ struct CardHoverContainer<Content: View>: View {
     
     var body: some View {
         content
-            .background(theme.surfaceContainerHigh.opacity(isHovered ? 0.7 : 0.5))
+            .background(theme.isLight ? (isHovered ? theme.surfaceContainerHigh : theme.surfaceContainer) : theme.surfaceContainerHigh.opacity(isHovered ? 0.7 : 0.5))
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isHovered ? theme.primaryAccent.opacity(0.25) : theme.border, lineWidth: 1)
+                    .stroke(isHovered ? theme.primaryAccent.opacity(theme.isLight ? 0.4 : 0.25) : theme.border, lineWidth: 1)
             )
             .animation(.easeInOut(duration: 0.2), value: isHovered)
             .onHover { hovering in

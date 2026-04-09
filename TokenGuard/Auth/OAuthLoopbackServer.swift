@@ -81,7 +81,7 @@ final class OAuthLoopbackServer: @unchecked Sendable {
     
     private func receiveData(on connection: NWConnection, completion: @escaping @Sendable (Result<String, Error>) -> Void) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, isComplete, error in
-            if let error = error {
+            if error != nil {
                 connection.cancel()
                 return
             }

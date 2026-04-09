@@ -9,7 +9,8 @@ struct InlineAddAccountView: View {
     let onComplete: () -> Void
 
     @State private var selectedProvider: ServiceType = .claude
-    @State private var accountName = ""
+    @State private var accountEmail = ""
+    @State private var accountAlias = ""
     @State private var statusMessage: String?
     @State private var isSaving = false
 
@@ -53,23 +54,43 @@ struct InlineAddAccountView: View {
                         }
                     }
 
-                    // 2. Account Name Input
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ACCOUNT ALIAS")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(1.0)
-                            .foregroundStyle(theme.textSecondary)
-                        
-                        TextField("e.g. Work API, Personal", text: $accountName)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13, weight: .medium))
-                            .padding(10)
-                            .background(theme.backgroundMain)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(theme.border, lineWidth: 1)
-                            )
+                    // 2. Account Information Input
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("ACCOUNT EMAIL")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(1.0)
+                                .foregroundStyle(theme.textSecondary)
+                            
+                            TextField("e.g. you@example.com", text: $accountEmail)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13, weight: .medium))
+                                .padding(10)
+                                .background(theme.backgroundMain)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(theme.border, lineWidth: 1)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("ACCOUNT ALIAS")
+                                .font(.system(size: 10, weight: .bold))
+                                .tracking(1.0)
+                                .foregroundStyle(theme.textSecondary)
+                            
+                            TextField("e.g. Work, Personal (Optional)", text: $accountAlias)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13, weight: .medium))
+                                .padding(10)
+                                .background(theme.backgroundMain)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(theme.border, lineWidth: 1)
+                                )
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -139,7 +160,7 @@ struct InlineAddAccountView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .foregroundStyle(isSelected ? type.tintColor(for: theme) : theme.textSecondary.opacity(0.5))
-            .background(isSelected ? type.tintColor(for: theme).opacity(0.1) : theme.surfaceContainerHigh.opacity(0.3))
+            .background(isSelected ? type.tintColor(for: theme).opacity(0.1) : (theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3)))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? type.tintColor(for: theme).opacity(0.5) : theme.border, lineWidth: 1)
@@ -150,7 +171,7 @@ struct InlineAddAccountView: View {
     }
 
     private var canSubmit: Bool {
-        !accountName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !accountEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func saveAccount() {
@@ -158,10 +179,11 @@ struct InlineAddAccountView: View {
         isSaving = true
         statusMessage = nil
 
-        let normalizedName = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedEmail = accountEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAlias = accountAlias.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
-                let account = try await buildAccount(named: normalizedName)
+                let account = try await buildAccount(named: normalizedEmail, alias: normalizedAlias.isEmpty ? nil : normalizedAlias)
                 try accountStore.add(account)
                 await pollingEngine.refreshAll(force: true)
                 await MainActor.run {
@@ -178,7 +200,7 @@ struct InlineAddAccountView: View {
         }
     }
 
-    private func buildAccount(named normalizedName: String) async throws -> Account {
+    private func buildAccount(named normalizedName: String, alias: String?) async throws -> Account {
         let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
         var configuration: [String: String] = [:]
 
@@ -186,9 +208,9 @@ struct InlineAddAccountView: View {
             configuration[Account.ConfigurationKey.planType] = "consumer"
         }
 
-        let normalizedAlias = normalizedName.lowercased()
-        if normalizedAlias.contains("@") && (selectedProvider == .codex || selectedProvider == .antigravity) {
-            configuration[Account.ConfigurationKey.consumerEmail] = normalizedAlias
+        let normalizedNameLower = normalizedName.lowercased()
+        if normalizedNameLower.contains("@") && (selectedProvider == .codex || selectedProvider == .antigravity || selectedProvider == .claude) {
+            configuration[Account.ConfigurationKey.consumerEmail] = normalizedNameLower
         }
 
         if selectedProvider == .antigravity,
@@ -200,6 +222,7 @@ struct InlineAddAccountView: View {
 
         return Account(
             name: normalizedName,
+            alias: alias,
             serviceType: selectedProvider,
             credentialRef: credentialRef,
             configuration: configuration

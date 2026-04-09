@@ -256,7 +256,14 @@ final class UsagePollingEngine {
         for (serviceType, accounts) in consumerAccountsByService where accounts.count > 1 {
             let identity: ConsumerAccountIdentity?
             if serviceType == .codex {
-                identity = await codexClient.currentState().identity
+                let liveIdentity = await codexClient.currentState().identity
+                if let liveIdentity {
+                    identity = liveIdentity
+                } else if let detector = providers[serviceType] as? any ConsumerAccountDetecting {
+                    identity = try? await detector.currentConsumerIdentity()
+                } else {
+                    identity = nil
+                }
             } else {
                 guard let detector = providers[serviceType] as? any ConsumerAccountDetecting else {
                     continue

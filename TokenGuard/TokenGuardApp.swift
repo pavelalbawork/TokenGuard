@@ -48,8 +48,7 @@ struct TokenGuardApp: App {
                     Task { await pollingEngine.refreshAll(force: true) }
                 }
         } label: {
-            let ratio = worstStatusMaxRatio
-            Image(nsImage: depletingShieldImage(ratio: ratio))
+            Image(nsImage: menuBarIcon())
         }
         .menuBarExtraStyle(.window)
 
@@ -62,31 +61,8 @@ struct TokenGuardApp: App {
         }
     }
     
-    private func depletingShieldImage(ratio: Double) -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        let image = NSImage(size: size, flipped: false) { rect in
-            // Draw empty shield outline
-            if let shield = NSImage(systemSymbolName: "shield", accessibilityDescription: nil) {
-                shield.draw(in: rect)
-            }
-            
-            let fillHeight = min(max(rect.height * CGFloat(1.0 - ratio), 0), rect.height)
-            if fillHeight > 0, let shieldFill = NSImage(systemSymbolName: "shield.fill", accessibilityDescription: nil) {
-                NSGraphicsContext.current?.saveGraphicsState()
-                
-                // Clip bottom-up based on fill ratio
-                let clipRect = NSRect(x: 0, y: 0, width: rect.width, height: fillHeight)
-                NSBezierPath(rect: clipRect).addClip()
-                
-                // Draw the fill physically inset by 1.5 points so there is a guaranteed geometric gap 
-                // between the fluid and the outer container walls.
-                // This bypasses the macOS menu bar template alpha-dropping bug!
-                shieldFill.draw(in: rect.insetBy(dx: 1.5, dy: 1.5))
-                
-                NSGraphicsContext.current?.restoreGraphicsState()
-            }
-            return true
-        }
+    private func menuBarIcon() -> NSImage {
+        let image = NSImage(systemSymbolName: "bolt.shield.fill", accessibilityDescription: "TokenGuard")!
         image.isTemplate = true
         return image
     }

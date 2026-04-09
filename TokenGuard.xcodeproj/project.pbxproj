@@ -35,6 +35,7 @@
 		ADDD9AB09BF671B09E596331 /* AccountCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E047DCB91C44198B6A70F04 /* AccountCardView.swift */; };
 		B4F0CC8F1E5D76B949EFAE24 /* AccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417504EC66A08ECB985C9506 /* AccountStore.swift */; };
 		B7039FAC053B9EA1095ED271 /* CodexSessionSnapshotReaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F144F9BE0B087DAC708BEC4C /* CodexSessionSnapshotReaderTests.swift */; };
+		B9890A14CCB03DADA1741855 /* AccountEditScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28DA9E1A5A8A553C531C2A24 /* AccountEditScreen.swift */; };
 		BEB397354963978F32D4D0A7 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7E87BADC5F5B18463AF70B /* ThemeManager.swift */; };
 		C5702B6E8A6FCCA23CEC5031 /* ClaudeCodeCLIParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCDB1731675C35CAA12931A /* ClaudeCodeCLIParser.swift */; };
 		C57F54A520AF2793C6E13511 /* AddAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51689E45AE186844A312406C /* AddAccountView.swift */; };
@@ -66,6 +67,7 @@
 		1882D7579AD3EA71D6302738 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
 		19B944AF21B5F9835122DD4D /* ServiceProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceProvider.swift; sourceTree = "<group>"; };
 		1D8D50CD290CFC4EA94F9100 /* ServiceAccountAuthenticator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceAccountAuthenticator.swift; sourceTree = "<group>"; };
+		28DA9E1A5A8A553C531C2A24 /* AccountEditScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountEditScreen.swift; sourceTree = "<group>"; };
 		3235256BA856A84A0C11E108 /* UsageWindowRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageWindowRow.swift; sourceTree = "<group>"; };
 		37750C3B9CC45C6C3E91134F /* Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Account.swift; sourceTree = "<group>"; };
 		3E307FD57182195FC0CED9CD /* UsageProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageProgressBar.swift; sourceTree = "<group>"; };
@@ -145,6 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				8E047DCB91C44198B6A70F04 /* AccountCardView.swift */,
+				28DA9E1A5A8A553C531C2A24 /* AccountEditScreen.swift */,
 				51689E45AE186844A312406C /* AddAccountView.swift */,
 				5AE3C2DB1C10A565BB292647 /* CountdownTimerText.swift */,
 				010291CE9D08A43432C35F7B /* MainPopoverView.swift */,
@@ -334,6 +337,7 @@
 			files = (
 				42221BC511A0ADF1C38E3139 /* Account.swift in Sources */,
 				ADDD9AB09BF671B09E596331 /* AccountCardView.swift in Sources */,
+				B9890A14CCB03DADA1741855 /* AccountEditScreen.swift in Sources */,
 				B4F0CC8F1E5D76B949EFAE24 /* AccountStore.swift in Sources */,
 				C57F54A520AF2793C6E13511 /* AddAccountView.swift in Sources */,
 				A44DEC2D285BA93C2C40CB55 /* AnthropicProvider.swift in Sources */,

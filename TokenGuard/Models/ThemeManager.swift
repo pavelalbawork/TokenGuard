@@ -9,12 +9,12 @@ public class ThemeManager {
         }
     }
     
-    public var currentTheme: Theme = .monolith
+    public var currentTheme: Theme = .vantage
     
     @MainActor public static let shared = ThemeManager()
     
     private init() {
-        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.monolith.id
+        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.vantage.id
         updateTheme()
     }
     
@@ -23,8 +23,8 @@ public class ThemeManager {
             self.currentTheme = theme
         } else {
             // Fallback gracefully if an old invalid theme ID is in UserDefaults
-            self.currentTheme = .monolith
-            self.selectedThemeId = Theme.monolith.id
+            self.currentTheme = .vantage
+            self.selectedThemeId = Theme.vantage.id
         }
     }
     

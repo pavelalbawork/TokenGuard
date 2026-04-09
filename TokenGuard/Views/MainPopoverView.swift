@@ -2,7 +2,7 @@ import SwiftUI
 
 enum NavigationTab: String, CaseIterable {
     case usage = "USAGE"
-    case limits = "LIMITS"
+    case accounts = "ACCOUNTS"
 }
 
 struct MainPopoverView: View {
@@ -99,7 +99,7 @@ struct MainPopoverView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(theme.backgroundMain.opacity(0.95))
+            .background(theme.isLight ? theme.backgroundMain : theme.backgroundMain.opacity(0.95))
             .background(.ultraThinMaterial)
             .border(width: 1, edges: [.bottom], color: theme.border)
             .zIndex(1)
@@ -175,8 +175,8 @@ struct MainPopoverView: View {
                                         }
                                     }
                                 }
-                            } else if selectedTab == .limits {
-                                LimitsView()
+                            } else if selectedTab == .accounts {
+                                AccountEditScreen()
                             }
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -305,16 +305,17 @@ struct GlobalUsageHeroView: View {
     struct ProviderMetrics {
         var shortTerm: Double? // 5H rolling
         var longTerm: Double?  // Weekly/Daily limit
+        var isShortGrayedOut: Bool = false
     }
-    
+
     var body: some View {
         let theme = themeManager.currentTheme
         let (codex, claude, ag) = calculateMetrics()
-        
+
         HStack(spacing: 20) {
             UnifiedConcentricGauge(
                 title: "CODEX",
-                icon: "bolt.shield.fill",
+                icon: "terminal",
                 shortLabel: "5H",
                 longLabel: "WK",
                 metrics: codex,
@@ -323,10 +324,10 @@ struct GlobalUsageHeroView: View {
                 accentColor: theme.primaryAccent
             )
             .frame(maxWidth: .infinity)
-            
+
             UnifiedConcentricGauge(
                 title: "CLAUDE",
-                icon: "bolt.shield.fill",
+                icon: "asterisk",
                 shortLabel: "5H",
                 longLabel: "WK",
                 metrics: claude,
@@ -335,12 +336,12 @@ struct GlobalUsageHeroView: View {
                 accentColor: theme.primaryAccent.opacity(0.8)
             )
             .frame(maxWidth: .infinity)
-            
+
             UnifiedConcentricGauge(
-                title: "ANTIGRAV",
-                icon: "bolt.shield.fill",
-                shortLabel: "DAY",
-                longLabel: "DAY",
+                title: "AG",
+                icon: "ellipsis",
+                shortLabel: "CLAUDE",
+                longLabel: "GEMINI",
                 metrics: ag,
                 theme: theme,
                 baseColor: theme.primaryAccent.opacity(0.3),
@@ -352,49 +353,83 @@ struct GlobalUsageHeroView: View {
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(theme.surfaceContainerHigh.opacity(0.3)) // Ultra luxury finish
+                .fill(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3)) // Ultra luxury finish
         )
     }
-    
+
     private func calculateMetrics() -> (codex: ProviderMetrics, claude: ProviderMetrics, ag: ProviderMetrics) {
         var c_shortTot = 0.0, c_shortCnt = 0, c_longTot = 0.0, c_longCnt = 0
         var cl_shortTot = 0.0, cl_shortCnt = 0, cl_longTot = 0.0, cl_longCnt = 0
-        var ag_tot = 0.0, ag_cnt = 0
-        
+        var ag_claudeTot = 0.0, ag_claudeCnt = 0
+        var ag_geminiTot = 0.0, ag_geminiCnt = 0
+
         for account in accountStore.accounts {
             guard let state = pollingEngine.accountStates[account.id], let snapshot = state.snapshot else { continue }
             
-            for window in snapshot.windows {
-                guard let progress = window.percentUsed else { continue }
+            if account.serviceType == .codex || account.serviceType == .claude {
+                var weeklyProgress: Double = 0.0
+                var shortProgress: Double = 0.0
+                var hasShort = false
+                var hasWeekly = false
                 
-                if account.serviceType == .codex {
-                    if window.windowType == .rolling5h { c_shortTot += progress; c_shortCnt += 1 }
-                    else if window.windowType == .weekly { c_longTot += progress; c_longCnt += 1 }
-                } else if account.serviceType == .claude {
-                    if window.windowType == .rolling5h { cl_shortTot += progress; cl_shortCnt += 1 }
-                    else if window.windowType == .weekly { cl_longTot += progress; cl_longCnt += 1 }
-                } else if account.serviceType == .antigravity {
-                    // Ignore Flash
-                    if window.label == "Anthropic (Claude)" || window.label == "Gemini Pro" {
-                        ag_tot += progress; ag_cnt += 1
+                for window in snapshot.windows {
+                    guard let progress = window.percentUsed else { continue }
+                    if window.windowType == .weekly {
+                        weeklyProgress = progress
+                        hasWeekly = true
+                    } else if window.windowType == .rolling5h {
+                        shortProgress = progress
+                        hasShort = true
+                    }
+                }
+                
+                if hasShort {
+                    if hasWeekly && weeklyProgress >= 1.0 {
+                        shortProgress = 1.0
+                    }
+                    if account.serviceType == .codex {
+                        c_shortTot += shortProgress; c_shortCnt += 1
+                    } else {
+                        cl_shortTot += shortProgress; cl_shortCnt += 1
+                    }
+                }
+                
+                if hasWeekly {
+                    if account.serviceType == .codex {
+                        c_longTot += weeklyProgress; c_longCnt += 1
+                    } else {
+                        cl_longTot += weeklyProgress; cl_longCnt += 1
+                    }
+                }
+            } else if account.serviceType == .antigravity {
+                for window in snapshot.windows {
+                    guard let progress = window.percentUsed else { continue }
+                    if window.label == "Anthropic (Claude)" {
+                        ag_claudeTot += progress; ag_claudeCnt += 1
+                    } else if window.label == "Gemini Pro" {
+                        ag_geminiTot += progress; ag_geminiCnt += 1
                     }
                 }
             }
         }
-        
-        let codex = ProviderMetrics(
+
+        var codex = ProviderMetrics(
             shortTerm: c_shortCnt > 0 ? (c_shortTot / Double(c_shortCnt)) : nil,
             longTerm: c_longCnt > 0 ? (c_longTot / Double(c_longCnt)) : nil
         )
-        
-        let claude = ProviderMetrics(
+        if let long = codex.longTerm, long >= 1.0 { codex.isShortGrayedOut = true }
+
+        var claude = ProviderMetrics(
             shortTerm: cl_shortCnt > 0 ? (cl_shortTot / Double(cl_shortCnt)) : nil,
             longTerm: cl_longCnt > 0 ? (cl_longTot / Double(cl_longCnt)) : nil
         )
-        
-        let agVal: Double? = ag_cnt > 0 ? (ag_tot / Double(ag_cnt)) : nil
-        let ag = ProviderMetrics(shortTerm: agVal, longTerm: agVal)
-        
+        if let long = claude.longTerm, long >= 1.0 { claude.isShortGrayedOut = true }
+
+        let ag = ProviderMetrics(
+            shortTerm: ag_claudeCnt > 0 ? (ag_claudeTot / Double(ag_claudeCnt)) : nil,
+            longTerm: ag_geminiCnt > 0 ? (ag_geminiTot / Double(ag_geminiCnt)) : nil
+        )
+
         return (codex, claude, ag)
     }
 }
@@ -419,6 +454,7 @@ struct UnifiedConcentricGauge: View {
         let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0)))
         let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
         let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
+        let innerRingColor = metrics.isShortGrayedOut ? theme.surfaceContainerHigh.opacity(0.8) : baseColor
         
         VStack(spacing: 12) {
             ZStack {
@@ -429,31 +465,6 @@ struct UnifiedConcentricGauge: View {
                 Circle()
                     .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 4)
                     .frame(width: 68, height: 68)
-                
-                // Micro-Labels positioned exactly on top of the tracks
-                VStack(spacing: 0) {
-                    Text(longLabel)
-                        .font(.system(size: 6, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(accentColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(theme.surfaceContainerHigh))
-                        .offset(y: -4)
-                    Spacer()
-                }
-                .frame(height: 84)
-                
-                VStack(spacing: 0) {
-                    Spacer()
-                    Text(shortLabel)
-                        .font(.system(size: 6, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(accentColor)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(theme.surfaceContainerHigh))
-                        .offset(y: 4)
-                }
-                .frame(height: 68)
                 
                 // Center Symbol
                 Image(systemName: icon)
@@ -472,10 +483,10 @@ struct UnifiedConcentricGauge: View {
                 // Inner Ring (Short-Term limit)
                 Circle()
                     .trim(from: 0.0, to: shortRemaining)
-                    .stroke(baseColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .stroke(innerRingColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .frame(width: 68, height: 68)
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: baseColor.opacity(0.4), radius: 3, x: 0, y: 0)
+                    .shadow(color: innerRingColor.opacity(0.4), radius: 3, x: 0, y: 0)
                 
                 // Outer Ring (Long-Term limit)
                 Circle()
@@ -495,8 +506,14 @@ struct UnifiedConcentricGauge: View {
                     .font(.system(size: 11, weight: .black))
                     .tracking(1.5)
                     .foregroundStyle(theme.textPrimary)
+                
                 if let short = metrics.shortTerm {
                     Text("\(Int(max(0, 1.0 - short) * 100))% \(shortLabel)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(innerRingColor)
+                }
+                if let long = metrics.longTerm {
+                    Text("\(Int(max(0, 1.0 - long) * 100))% \(longLabel)")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundStyle(accentColor)
                 }
@@ -593,7 +610,7 @@ struct LimitsView: View {
                             }
                         }
                         .padding(8)
-                        .background(theme.surfaceContainerHigh.opacity(0.3))
+                        .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 } else {
@@ -604,7 +621,7 @@ struct LimitsView: View {
             }
         }
         .padding(12)
-        .background(theme.surfaceContainerHigh.opacity(0.5))
+        .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)

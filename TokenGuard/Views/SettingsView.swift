@@ -31,7 +31,7 @@ struct SettingsView: View {
                         .controlSize(.small)
                 }
                 .padding(10)
-                .background(theme.surfaceContainerHigh.opacity(0.3))
+                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
                 .onChange(of: launchAtLogin) { _, newValue in
@@ -77,7 +77,7 @@ struct SettingsView: View {
                     .fixedSize()
                 }
                 .padding(10)
-                .background(theme.surfaceContainerHigh.opacity(0.3))
+                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
             }
@@ -128,7 +128,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .background(theme.surfaceContainerHigh.opacity(0.3))
+                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
             }
