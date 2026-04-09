@@ -313,7 +313,7 @@ struct GlobalUsageHeroView: View {
         let theme = themeManager.currentTheme
         let (codex, claude, ag) = calculateMetrics()
 
-        HStack(spacing: 20) {
+        HStack(alignment: .top, spacing: 20) {
             UnifiedConcentricGauge(
                 title: "CODEX",
                 icon: "terminal",
