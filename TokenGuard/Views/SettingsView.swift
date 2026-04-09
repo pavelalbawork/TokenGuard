@@ -91,6 +91,7 @@ struct SettingsView: View {
                         HStack(spacing: 10) {
                             Image(systemName: service.iconName)
                                 .font(.system(size: 12))
+                                .rotationEffect(.degrees(service.rotationAngle))
                                 .foregroundStyle(service.tintColor(for: theme))
                                 .frame(width: 18)
                             

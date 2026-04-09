@@ -154,6 +154,7 @@ struct InlineAddAccountView: View {
             VStack(spacing: 6) {
                 Image(systemName: type.iconName)
                     .font(.system(size: 16, weight: .light))
+                    .rotationEffect(.degrees(type.rotationAngle))
                 Text(type.rawValue.capitalized)
                     .font(.system(size: 9, weight: .bold))
             }

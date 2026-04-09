@@ -18,6 +18,7 @@ struct ServiceSectionView: View {
                 Image(systemName: serviceType.iconName)
                     .font(.system(size: 14, weight: .light))
                     .symbolRenderingMode(.hierarchical)
+                    .rotationEffect(.degrees(serviceType.rotationAngle))
                     .foregroundStyle(serviceType.tintColor(for: theme))
 
                 Text(serviceType.rawValue.uppercased())

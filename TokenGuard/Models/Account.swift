@@ -9,7 +9,7 @@ enum ServiceType: String, Codable, CaseIterable, Sendable {
         switch self {
         case .claude: return "asterisk"
         case .codex: return "terminal"
-        case .antigravity: return "ellipsis"
+        case .antigravity: return "point.3.filled.connected.trianglepath.dotted"
         }
     }
 }
@@ -23,6 +23,10 @@ extension ServiceType {
         case .codex: return theme.primaryAccent
         case .antigravity: return theme.textPrimary
         }
+    }
+
+    var rotationAngle: Double {
+        self == .antigravity ? 180 : 0
     }
 }
 

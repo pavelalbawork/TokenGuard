@@ -339,13 +339,14 @@ struct GlobalUsageHeroView: View {
 
             UnifiedConcentricGauge(
                 title: "AG",
-                icon: "ellipsis",
+                icon: ServiceType.antigravity.iconName,
                 shortLabel: "CLAUDE",
                 longLabel: "GEMINI",
                 metrics: ag,
                 theme: theme,
                 baseColor: theme.primaryAccent.opacity(0.3),
-                accentColor: theme.primaryAccent.opacity(0.6)
+                accentColor: theme.primaryAccent.opacity(0.6),
+                rotation: ServiceType.antigravity.rotationAngle
             )
             .frame(maxWidth: .infinity)
         }
@@ -445,6 +446,7 @@ struct UnifiedConcentricGauge: View {
     let theme: Theme
     let baseColor: Color
     let accentColor: Color
+    var rotation: Double = 0
     
     @State private var isBreathing = false
     
@@ -473,6 +475,7 @@ struct UnifiedConcentricGauge: View {
                         LinearGradient(colors: [baseColor, accentColor], startPoint: .bottomLeading, endPoint: .topTrailing)
                     )
                     .shadow(color: accentColor.opacity(0.3), radius: 6, x: 0, y: 0)
+                    .rotationEffect(.degrees(rotation))
                     .scaleEffect(isBreathing ? 1.05 : 0.95)
                     .opacity(isBreathing ? 1.0 : 0.6)
                     .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
@@ -578,6 +581,7 @@ struct LimitsView: View {
             HStack(spacing: 6) {
                 Image(systemName: serviceType.iconName)
                     .font(.system(size: 12))
+                    .rotationEffect(.degrees(serviceType.rotationAngle))
                     .foregroundStyle(serviceType.tintColor(for: theme))
                 Text(serviceType.rawValue.uppercased())
                     .font(.system(size: 10, weight: .bold))
