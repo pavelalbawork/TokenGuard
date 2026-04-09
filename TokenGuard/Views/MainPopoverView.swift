@@ -303,9 +303,10 @@ struct GlobalUsageHeroView: View {
     @Environment(ThemeManager.self) private var themeManager
     
     struct ProviderMetrics {
-        var shortTerm: Double? // 5H rolling
-        var longTerm: Double?  // Weekly/Daily limit
-        var isShortGrayedOut: Bool = false
+        var outerTerm: Double?
+        var middleTerm: Double?
+        var innerTerm: Double?
+        var isMiddleGrayedOut: Bool = false
     }
 
     var body: some View {
@@ -316,8 +317,9 @@ struct GlobalUsageHeroView: View {
             UnifiedConcentricGauge(
                 title: "CODEX",
                 icon: "terminal",
-                shortLabel: "5H",
-                longLabel: "WK",
+                outerLabel: "WK",
+                middleLabel: "5H",
+                innerLabel: nil,
                 metrics: codex,
                 theme: theme,
                 baseColor: theme.primaryAccent.opacity(0.3),
@@ -328,8 +330,9 @@ struct GlobalUsageHeroView: View {
             UnifiedConcentricGauge(
                 title: "CLAUDE",
                 icon: "asterisk",
-                shortLabel: "5H",
-                longLabel: "WK",
+                outerLabel: "WK",
+                middleLabel: "5H",
+                innerLabel: nil,
                 metrics: claude,
                 theme: theme,
                 baseColor: theme.primaryAccent.opacity(0.3),
@@ -340,8 +343,9 @@ struct GlobalUsageHeroView: View {
             UnifiedConcentricGauge(
                 title: "AG",
                 icon: ServiceType.antigravity.iconName,
-                shortLabel: "CLAUDE",
-                longLabel: "GEMINI",
+                outerLabel: "CLAUDE",
+                middleLabel: "GEMINI PRO",
+                innerLabel: "GEMINI FLASH",
                 metrics: ag,
                 theme: theme,
                 baseColor: theme.primaryAccent.opacity(0.3),
@@ -362,7 +366,8 @@ struct GlobalUsageHeroView: View {
         var c_shortTot = 0.0, c_shortCnt = 0, c_longTot = 0.0, c_longCnt = 0
         var cl_shortTot = 0.0, cl_shortCnt = 0, cl_longTot = 0.0, cl_longCnt = 0
         var ag_claudeTot = 0.0, ag_claudeCnt = 0
-        var ag_geminiTot = 0.0, ag_geminiCnt = 0
+        var ag_geminiProTot = 0.0, ag_geminiProCnt = 0
+        var ag_geminiFlashTot = 0.0, ag_geminiFlashCnt = 0
 
         for account in accountStore.accounts {
             guard let state = pollingEngine.accountStates[account.id], let snapshot = state.snapshot else { continue }
@@ -408,27 +413,30 @@ struct GlobalUsageHeroView: View {
                     if window.label == "Anthropic (Claude)" {
                         ag_claudeTot += progress; ag_claudeCnt += 1
                     } else if window.label == "Gemini Pro" {
-                        ag_geminiTot += progress; ag_geminiCnt += 1
+                        ag_geminiProTot += progress; ag_geminiProCnt += 1
+                    } else if window.label == "Gemini Flash" {
+                        ag_geminiFlashTot += progress; ag_geminiFlashCnt += 1
                     }
                 }
             }
         }
 
         var codex = ProviderMetrics(
-            shortTerm: c_shortCnt > 0 ? (c_shortTot / Double(c_shortCnt)) : nil,
-            longTerm: c_longCnt > 0 ? (c_longTot / Double(c_longCnt)) : nil
+            outerTerm: c_longCnt > 0 ? (c_longTot / Double(c_longCnt)) : nil,
+            middleTerm: c_shortCnt > 0 ? (c_shortTot / Double(c_shortCnt)) : nil
         )
-        if let long = codex.longTerm, long >= 1.0 { codex.isShortGrayedOut = true }
+        if let outer = codex.outerTerm, outer >= 1.0 { codex.isMiddleGrayedOut = true }
 
         var claude = ProviderMetrics(
-            shortTerm: cl_shortCnt > 0 ? (cl_shortTot / Double(cl_shortCnt)) : nil,
-            longTerm: cl_longCnt > 0 ? (cl_longTot / Double(cl_longCnt)) : nil
+            outerTerm: cl_longCnt > 0 ? (cl_longTot / Double(cl_longCnt)) : nil,
+            middleTerm: cl_shortCnt > 0 ? (cl_shortTot / Double(cl_shortCnt)) : nil
         )
-        if let long = claude.longTerm, long >= 1.0 { claude.isShortGrayedOut = true }
+        if let outer = claude.outerTerm, outer >= 1.0 { claude.isMiddleGrayedOut = true }
 
         let ag = ProviderMetrics(
-            shortTerm: ag_claudeCnt > 0 ? (ag_claudeTot / Double(ag_claudeCnt)) : nil,
-            longTerm: ag_geminiCnt > 0 ? (ag_geminiTot / Double(ag_geminiCnt)) : nil
+            outerTerm: ag_claudeCnt > 0 ? (ag_claudeTot / Double(ag_claudeCnt)) : nil,
+            middleTerm: ag_geminiProCnt > 0 ? (ag_geminiProTot / Double(ag_geminiProCnt)) : nil,
+            innerTerm: ag_geminiFlashCnt > 0 ? (ag_geminiFlashTot / Double(ag_geminiFlashCnt)) : nil
         )
 
         return (codex, claude, ag)
@@ -440,8 +448,9 @@ struct GlobalUsageHeroView: View {
 struct UnifiedConcentricGauge: View {
     let title: String
     let icon: String
-    let shortLabel: String
-    let longLabel: String
+    let outerLabel: String?
+    let middleLabel: String?
+    let innerLabel: String?
     let metrics: GlobalUsageHeroView.ProviderMetrics
     let theme: Theme
     let baseColor: Color
@@ -451,22 +460,31 @@ struct UnifiedConcentricGauge: View {
     @State private var isBreathing = false
     
     var body: some View {
-        let shortVal = metrics.shortTerm ?? 0.0
-        let longVal = metrics.longTerm ?? 0.0
-        let shortRemaining = CGFloat(max(0, 1.0 - min(shortVal, 1.0)))
-        let longRemaining = CGFloat(max(0, 1.0 - min(longVal, 1.0)))
-        let pulseDuration = max(0.5, 3.0 * (1.0 - min(shortVal, 1.0)))
-        let innerRingColor = metrics.isShortGrayedOut ? theme.surfaceContainerHigh.opacity(0.8) : baseColor
+        let innerVal = metrics.innerTerm ?? 0.0
+        let middleVal = metrics.middleTerm ?? 0.0
+        let outerVal = metrics.outerTerm ?? 0.0
+        
+        let innerRemaining = CGFloat(max(0, 1.0 - min(innerVal, 1.0)))
+        let middleRemaining = CGFloat(max(0, 1.0 - min(middleVal, 1.0)))
+        let outerRemaining = CGFloat(max(0, 1.0 - min(outerVal, 1.0)))
+        
+        let pulseDuration = max(0.5, 3.0 * (1.0 - min(middleVal, 1.0)))
+        let midRingColor = metrics.isMiddleGrayedOut ? theme.surfaceContainerHigh.opacity(0.8) : baseColor
         
         VStack(spacing: 12) {
             ZStack {
                 // Background Tracks
                 Circle()
-                    .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 6)
+                    .stroke(theme.surfaceContainerHigh.opacity(0.3), lineWidth: 6)
                     .frame(width: 84, height: 84)
                 Circle()
-                    .stroke(theme.surfaceContainerHigh.opacity(0.6), lineWidth: 4)
+                    .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
                     .frame(width: 68, height: 68)
+                if metrics.innerTerm != nil {
+                    Circle()
+                        .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 3)
+                        .frame(width: 54, height: 54)
+                }
                 
                 // Center Symbol
                 Image(systemName: icon)
@@ -483,17 +501,27 @@ struct UnifiedConcentricGauge: View {
                         isBreathing = true
                     }
                 
-                // Inner Ring (Short-Term limit)
+                // Inner Ring
+                if metrics.innerTerm != nil {
+                    Circle()
+                        .trim(from: 0.0, to: innerRemaining)
+                        .stroke(midRingColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 54, height: 54)
+                        .rotationEffect(.degrees(-90))
+                        .shadow(color: midRingColor.opacity(0.3), radius: 2, x: 0, y: 0)
+                }
+                
+                // Middle Ring
                 Circle()
-                    .trim(from: 0.0, to: shortRemaining)
-                    .stroke(innerRingColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .trim(from: 0.0, to: middleRemaining)
+                    .stroke(midRingColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .frame(width: 68, height: 68)
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: innerRingColor.opacity(0.4), radius: 3, x: 0, y: 0)
+                    .shadow(color: midRingColor.opacity(0.4), radius: 3, x: 0, y: 0)
                 
-                // Outer Ring (Long-Term limit)
+                // Outer Ring
                 Circle()
-                    .trim(from: 0.0, to: longRemaining)
+                    .trim(from: 0.0, to: outerRemaining)
                     .stroke(
                         LinearGradient(colors: [baseColor, accentColor], startPoint: .bottom, endPoint: .top),
                         style: StrokeStyle(lineWidth: 6, lineCap: .round)
@@ -510,15 +538,20 @@ struct UnifiedConcentricGauge: View {
                     .tracking(1.5)
                     .foregroundStyle(theme.textPrimary)
                 
-                if let short = metrics.shortTerm {
-                    Text("\(Int(max(0, 1.0 - short) * 100))% \(shortLabel)")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(innerRingColor)
-                }
-                if let long = metrics.longTerm {
-                    Text("\(Int(max(0, 1.0 - long) * 100))% \(longLabel)")
+                if let outer = metrics.outerTerm, let outerLbl = outerLabel {
+                    Text("\(Int(max(0, 1.0 - outer) * 100))% \(outerLbl)")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundStyle(accentColor)
+                }
+                if let middle = metrics.middleTerm, let middleLbl = middleLabel {
+                    Text("\(Int(max(0, 1.0 - middle) * 100))% \(middleLbl)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(midRingColor)
+                }
+                if let inner = metrics.innerTerm, let innerLbl = innerLabel {
+                    Text("\(Int(max(0, 1.0 - inner) * 100))% \(innerLbl)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundStyle(midRingColor.opacity(0.7))
                 }
             }
         }
