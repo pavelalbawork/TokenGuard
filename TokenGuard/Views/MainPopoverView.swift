@@ -544,14 +544,16 @@ struct UnifiedConcentricGauge: View {
                         .foregroundStyle(accentColor)
                 }
                 if let middle = metrics.middleTerm, let middleLbl = middleLabel {
+                    let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.5) : accentColor.opacity(0.8)
                     Text("\(Int(max(0, 1.0 - middle) * 100))% \(middleLbl)")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(midRingColor)
+                        .foregroundStyle(color)
                 }
                 if let inner = metrics.innerTerm, let innerLbl = innerLabel {
+                    let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.3) : accentColor.opacity(0.6)
                     Text("\(Int(max(0, 1.0 - inner) * 100))% \(innerLbl)")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(midRingColor.opacity(0.7))
+                        .foregroundStyle(color)
                 }
             }
         }
