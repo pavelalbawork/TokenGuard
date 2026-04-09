@@ -36,7 +36,7 @@ struct TokenGuardApp: App {
                 .environment(accountStore)
                 .environment(pollingEngine)
                 .environment(themeManager)
-                .frame(width: 360, height: 800)
+                .frame(width: 400, height: 800)
                 .onAppear {
                     pollingEngine.start()
                 }
