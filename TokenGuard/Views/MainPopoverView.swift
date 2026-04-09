@@ -309,50 +309,63 @@ struct GlobalUsageHeroView: View {
         var isMiddleGrayedOut: Bool = false
     }
 
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
+
     var body: some View {
         let theme = themeManager.currentTheme
         let (codex, claude, ag) = calculateMetrics()
 
+        let orderKeys = providerOrderStr.components(separatedBy: ",")
+        let sortedServices = [ServiceType.codex, ServiceType.claude, ServiceType.antigravity].sorted { a, b in
+            let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
+            let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
+            return idxA < idxB
+        }
+
         HStack(alignment: .top, spacing: 20) {
-            UnifiedConcentricGauge(
-                title: "CODEX",
-                icon: "terminal",
-                outerLabel: "WK",
-                middleLabel: "5H",
-                innerLabel: nil,
-                metrics: codex,
-                theme: theme,
-                baseColor: theme.primaryAccent.opacity(0.3),
-                accentColor: theme.primaryAccent
-            )
-            .frame(maxWidth: .infinity)
-
-            UnifiedConcentricGauge(
-                title: "CLAUDE",
-                icon: "asterisk",
-                outerLabel: "WK",
-                middleLabel: "5H",
-                innerLabel: nil,
-                metrics: claude,
-                theme: theme,
-                baseColor: theme.primaryAccent.opacity(0.3),
-                accentColor: theme.primaryAccent.opacity(0.8)
-            )
-            .frame(maxWidth: .infinity)
-
-            UnifiedConcentricGauge(
-                title: "AG",
-                icon: ServiceType.antigravity.iconName,
-                outerLabel: "CLAUDE",
-                middleLabel: "GEMINI PRO",
-                innerLabel: "GEMINI FLASH",
-                metrics: ag,
-                theme: theme,
-                baseColor: theme.primaryAccent.opacity(0.3),
-                accentColor: theme.primaryAccent.opacity(0.6),
-                rotation: ServiceType.antigravity.rotationAngle
-            )
-            .frame(maxWidth: .infinity)
+            ForEach(sortedServices, id: \.self) { service in
+                if service == .codex {
+                    UnifiedConcentricGauge(
+                        title: "CODEX",
+                        icon: "terminal",
+                        outerLabel: "WK",
+                        middleLabel: "5H",
+                        innerLabel: nil,
+                        metrics: codex,
+                        theme: theme,
+                        baseColor: theme.primaryAccent.opacity(0.3),
+                        accentColor: theme.primaryAccent
+                    )
+                    .frame(maxWidth: .infinity)
+                } else if service == .claude {
+                    UnifiedConcentricGauge(
+                        title: "CLAUDE",
+                        icon: "asterisk",
+                        outerLabel: "WK",
+                        middleLabel: "5H",
+                        innerLabel: nil,
+                        metrics: claude,
+                        theme: theme,
+                        baseColor: theme.primaryAccent.opacity(0.3),
+                        accentColor: theme.primaryAccent.opacity(0.8)
+                    )
+                    .frame(maxWidth: .infinity)
+                } else if service == .antigravity {
+                    UnifiedConcentricGauge(
+                        title: "AG",
+                        icon: ServiceType.antigravity.iconName,
+                        outerLabel: "CLAUDE",
+                        middleLabel: "GEMINI PRO",
+                        innerLabel: "GEMINI FLASH",
+                        metrics: ag,
+                        theme: theme,
+                        baseColor: theme.primaryAccent.opacity(0.3),
+                        accentColor: theme.primaryAccent.opacity(0.6),
+                        rotation: ServiceType.antigravity.rotationAngle
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 24)
