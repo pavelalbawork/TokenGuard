@@ -132,17 +132,17 @@ extension Theme {
         id: "pastelDash",
         name: "Light: Pastel Dash",
         isLight: true,
-        backgroundMain: Color(hex: "#f4f5f7"),     // Very light gray/white background
+        backgroundMain: Color(hex: "#e5e7eb"),     // Distinct light gray background
         surface: Color(hex: "#ffffff"),            // Pure white cards
-        surfaceContainer: Color(hex: "#eaecf0"),   // Soft light gray
-        surfaceContainerHigh: Color(hex: "#dfe2e6"), // Deeper light gray
-        textPrimary: Color(hex: "#334155"),        // Sharp dark slate text
-        textSecondary: Color(hex: "#64748b"),      // Muted secondary text
+        surfaceContainer: Color(hex: "#ffffff"),   // Pure white un-hovered cards
+        surfaceContainerHigh: Color(hex: "#f3f4f6"), // Very soft hover tint
+        textPrimary: Color(hex: "#1f2937"),        // Sharp dark slate text
+        textSecondary: Color(hex: "#6b7280"),      // Muted secondary text
         primaryAccent: Color(hex: "#6B7AFA"),      // Soft purple/blue (Codex)
         secondaryAccent: Color(hex: "#7FE5FA"),    // Light sky cyan (Claude)
         tertiaryAccent: Color(hex: "#00C49A"),     // Viridian teal (Gemini)
         quaternaryAccent: Color(hex: "#9AE692"),   // Lime green (AG)
-        border: Color(hex: "#e2e8f0"),
+        border: Color(hex: "#d1d5db"),
         error: Color(hex: "#ef4444")               // Standard red error
     )
     

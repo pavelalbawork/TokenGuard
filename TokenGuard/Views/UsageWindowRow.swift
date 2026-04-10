@@ -2,6 +2,8 @@ import SwiftUI
 
 struct UsageWindowRow: View {
     let window: UsageWindow
+    let serviceType: ServiceType?
+    
     @Environment(ThemeManager.self) private var themeManager
 
     var body: some View {
@@ -28,7 +30,7 @@ struct UsageWindowRow: View {
             }
 
             if window.limit != nil {
-                UsageProgressBar(window: window)
+                UsageProgressBar(window: window, serviceType: serviceType)
             }
         }
         .accessibilityElement(children: .ignore)

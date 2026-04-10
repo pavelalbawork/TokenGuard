@@ -17,7 +17,7 @@ struct AccountCardView: View {
                 if let snapshot = state?.snapshot {
                     VStack(spacing: 13) {
                         ForEach(sortedWindows(for: snapshot.windows)) { window in
-                            UsageWindowRow(window: window)
+                            UsageWindowRow(window: window, serviceType: account.serviceType)
                         }
                     }
 
