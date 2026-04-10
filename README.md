@@ -6,29 +6,25 @@ Rather than asking for API keys or cloud syncing, TokenGuard reads local state f
 
 *Note: TokenGuard is an independent developer utility and is not affiliated with, endorsed by, or sponsored by OpenAI, Anthropic, or any other AI service provider.*
 
-<table>
-  <tr>
-    <td width="58%" valign="top">
-      <img src="docs/assets/readme-screenshot.png" alt="TokenGuard screenshot showing the menu bar dashboard with provider overview and per-account usage cards" />
-    </td>
-    <td width="42%" valign="top">
-      <p><strong>Why it earns a spot in your menu bar</strong></p>
-      <ul>
-        <li>One glance to see remaining capacity across Codex, Claude, Gemini CLI, and Antigravity.</li>
-        <li>Remaining-time windows and reset timing where local provider state exposes them.</li>
-        <li>Local-first account tracking with no analytics, hosted dashboard, or extra API setup.</li>
-        <li>Best for developers who actively switch between AI tools and want fast operational visibility.</li>
-      </ul>
-      <p><strong>What the app gives you</strong></p>
-      <ul>
-        <li>A compact global hero view for quick usage scans.</li>
-        <li>Per-account cards with remaining capacity, reset timing, and freshness state.</li>
-        <li>Multi-account support with active-account detection where local provider state makes that possible.</li>
-      </ul>
+<img
+  src="docs/assets/readme-screenshot.png"
+  alt="TokenGuard screenshot showing the menu bar dashboard with provider overview and per-account usage cards"
+  align="right"
+  width="420"
+/>
 
-    </td>
-  </tr>
-</table>
+## Why it earns a spot in your menu bar
+
+- One glance to see remaining capacity across Codex, Claude, Gemini CLI, and Antigravity.
+- Remaining-time windows and reset timing where local provider state exposes them.
+- Local-first account tracking with no analytics, hosted dashboard, or extra API setup.
+- Best for developers who actively switch between AI tools and want fast operational visibility.
+
+## What the app gives you
+
+- A compact global hero view for quick usage scans.
+- Per-account cards with remaining capacity, reset timing, and freshness state.
+- Multi-account support with active-account detection where local provider state makes that possible.
 
 ## What it does
 
