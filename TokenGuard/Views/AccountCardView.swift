@@ -118,6 +118,18 @@ struct AccountCardView: View {
                 return indexA < indexB
             }
         }
+        if account.serviceType == .gemini {
+            let order: [String: Int] = [
+                "PRO": 0,
+                "FLASH": 1,
+                "LITE": 2
+            ]
+            return windows.sorted { a, b in
+                let indexA = order[a.label ?? ""] ?? 99
+                let indexB = order[b.label ?? ""] ?? 99
+                return indexA < indexB
+            }
+        }
         return windows
     }
 }
