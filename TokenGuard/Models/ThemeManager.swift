@@ -9,12 +9,12 @@ public class ThemeManager {
         }
     }
     
-    public var currentTheme: Theme = .luminous
+    public var currentTheme: Theme = .nordicFrost
     
     @MainActor public static let shared = ThemeManager()
     
     private init() {
-        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.luminous.id
+        self.selectedThemeId = UserDefaults.standard.string(forKey: "selectedThemeId") ?? Theme.nordicFrost.id
         updateTheme()
     }
     
@@ -23,8 +23,8 @@ public class ThemeManager {
             self.currentTheme = theme
         } else {
             // Fallback gracefully if an old invalid theme ID is in UserDefaults
-            self.currentTheme = .luminous
-            self.selectedThemeId = Theme.luminous.id
+            self.currentTheme = .nordicFrost
+            self.selectedThemeId = Theme.nordicFrost.id
         }
     }
     
