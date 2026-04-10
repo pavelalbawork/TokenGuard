@@ -130,17 +130,17 @@ extension Theme {
         id: "burgundyLight",
         name: "Light: Burgundy Minimal",
         isLight: true,
-        backgroundMain: Color(hex: "#ece9ea"),     // Gray background
-        surface: Color(hex: "#f4f2f3"),            // Slightly lighter surface
-        surfaceContainer: Color(hex: "#e2dddf"),   // Darker container
-        surfaceContainerHigh: Color(hex: "#d9d5d6"),
-        textPrimary: Color(hex: "#2b1c1e"),
-        textSecondary: Color(hex: "#5c4f52"),
+        backgroundMain: Color(hex: "#b8b2b4"),     // Very dark gray for a light theme
+        surface: Color(hex: "#cfc9cb"),            // Elevated lighter gray
+        surfaceContainer: Color(hex: "#a6a0a2"),   // Deep inset background
+        surfaceContainerHigh: Color(hex: "#969092"),
+        textPrimary: Color(hex: "#140c0d"),        // Near black
+        textSecondary: Color(hex: "#3d2d31"),      // Extremely dark grey/brown
         primaryAccent: Color(hex: "#800020"),      // Burgundy
         secondaryAccent: Color(hex: "#b30030"),    // Lighter burgundy
         tertiaryAccent: Color(hex: "#4d0013"),     // Darker burgundy
-        border: Color(hex: "#cfc9cb"),
-        error: Color(hex: "#d93025")
+        border: Color(hex: "#8a8386"),
+        error: Color(hex: "#b91c1c")
     )
     
     public static let all: [Theme] = [

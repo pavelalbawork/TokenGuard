@@ -2,18 +2,18 @@ import SwiftUI
 
 struct AccountCardView: View {
     let account: Account
+    let referenceDate: Date
 
     @Environment(AccountStore.self) private var accountStore
     @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
 
     var body: some View {
-        TimelineView(.periodic(from: Date(), by: 30)) { context in
-            let state = pollingEngine.accountStates[account.id]
-            let theme = themeManager.currentTheme
+        let state = pollingEngine.accountStates[account.id]
+        let theme = themeManager.currentTheme
 
-            CardHoverContainer(theme: theme) {
-                VStack(alignment: .leading, spacing: 14) {
+        CardHoverContainer(theme: theme) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let snapshot = state?.snapshot {
                     VStack(spacing: 13) {
                         ForEach(sortedWindows(for: snapshot.windows)) { window in
@@ -22,11 +22,11 @@ struct AccountCardView: View {
                     }
 
                     if snapshot.isStale {
-                        Label("Last updated \(ageString(for: snapshot.timestamp, now: context.date))", systemImage: "clock.badge.exclamationmark")
+                        Label("Last updated \(ageString(for: snapshot.timestamp, now: referenceDate))", systemImage: "clock.badge.exclamationmark")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.secondaryAccent.opacity(0.9))
                     } else {
-                        Text("Last updated \(ageString(for: snapshot.timestamp, now: context.date))")
+                        Text("Last updated \(ageString(for: snapshot.timestamp, now: referenceDate))")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.75 : 0.58))
                     }
@@ -69,12 +69,11 @@ struct AccountCardView: View {
                             .foregroundStyle(theme.textSecondary)
                     }
                 }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func ageString(for date: Date, now: Date) -> String {

@@ -16,6 +16,38 @@ protocol ConsumerUsageSnapshotReading: Sendable {
     func windows(for serviceType: ServiceType) throws -> [UsageWindow]?
 }
 
+final class SnapshotReaderTTLCache: @unchecked Sendable {
+    private struct Entry {
+        let savedAt: Date
+        let windows: [UsageWindow]?
+    }
+
+    private let lock = NSLock()
+    private var entries: [String: Entry] = [:]
+
+    func value(key: String, now: Date, ttl: TimeInterval) -> [UsageWindow]?? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let entry = entries[key] else {
+            return nil
+        }
+
+        if now.timeIntervalSince(entry.savedAt) < ttl {
+            return .some(entry.windows)
+        }
+
+        entries.removeValue(forKey: key)
+        return nil
+    }
+
+    func store(_ windows: [UsageWindow]?, key: String, now: Date) {
+        lock.lock()
+        entries[key] = Entry(savedAt: now, windows: windows)
+        lock.unlock()
+    }
+}
+
 struct CodexConsumerSnapshot: Sendable, Equatable {
     let windows: [UsageWindow]
     let identity: ConsumerAccountIdentity?
@@ -627,16 +659,31 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
     }
 
     private let rootDirectoryURL: URL
+    private let now: @Sendable () -> Date
+    private let cache: SnapshotReaderTTLCache
+    private let cacheTTL: TimeInterval
 
     init(
-        rootDirectoryURL: URL = URL(fileURLWithPath: NSString(string: "~/.codex/sessions").expandingTildeInPath)
+        rootDirectoryURL: URL = URL(fileURLWithPath: NSString(string: "~/.codex/sessions").expandingTildeInPath),
+        now: @escaping @Sendable () -> Date = Date.init,
+        cache: SnapshotReaderTTLCache = SnapshotReaderTTLCache(),
+        cacheTTL: TimeInterval = 30
     ) {
         self.rootDirectoryURL = rootDirectoryURL
+        self.now = now
+        self.cache = cache
+        self.cacheTTL = cacheTTL
     }
 
     func windows(for serviceType: ServiceType) throws -> [UsageWindow]? {
         guard serviceType == .codex else {
             return nil
+        }
+
+        let currentTime = now()
+        let cacheKey = "\(serviceType.rawValue):\(rootDirectoryURL.path)"
+        if let cached = cache.value(key: cacheKey, now: currentTime, ttl: cacheTTL) {
+            return cached
         }
 
         let fileManager = FileManager.default
@@ -668,7 +715,9 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
             }
         }
 
-        return latest?.windows
+        let result = latest?.windows
+        cache.store(result, key: cacheKey, now: currentTime)
+        return result
     }
 
     private func windows(from fileURL: URL, fallbackTimestamp: Date) throws -> TimestampedWindows? {

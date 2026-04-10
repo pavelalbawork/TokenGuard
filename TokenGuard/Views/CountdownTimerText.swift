@@ -4,28 +4,31 @@ struct CountdownTimerText: View {
     let resetDate: Date
 
     var body: some View {
-        let referenceNow = Date()
-        let interval = resetDate.timeIntervalSince(referenceNow)
-        
-        if interval > 86400 {
-            TimelineView(.periodic(from: referenceNow, by: 60)) { context in
-                let now = context.date
-                let currentInterval = resetDate.timeIntervalSince(now)
-                
-                if currentInterval > 86400 {
-                    let days = Int(currentInterval / 86400)
-                    let hours = Int((currentInterval.truncatingRemainder(dividingBy: 86400)) / 3600)
-                    let daysStr = days == 1 ? "1 day" : "\(days) days"
-                    let hoursStr = hours == 1 ? "1 hour" : "\(hours) hours"
-                    Text("\(daysStr), \(hoursStr)")
-                } else {
-                    let end = resetDate > now ? resetDate : now
-                    Text(timerInterval: now...end, countsDown: true)
-                }
-            }
-        } else {
-            let end = resetDate > referenceNow ? resetDate : referenceNow
-            Text(timerInterval: referenceNow...end, countsDown: true)
+        TimelineView(.periodic(from: Date(), by: 60)) { context in
+            Text(remainingText(now: context.date))
         }
+    }
+
+    private func remainingText(now: Date) -> String {
+        let interval = resetDate.timeIntervalSince(now)
+        guard interval > 0 else { return "now" }
+
+        let totalMinutes = max(1, Int(ceil(interval / 60)))
+        let days = totalMinutes / 1_440
+        let hours = (totalMinutes % 1_440) / 60
+        let minutes = totalMinutes % 60
+
+        if days > 0 {
+            let daysText = days == 1 ? "1 day" : "\(days) days"
+            guard hours > 0 else { return daysText }
+            let hoursText = hours == 1 ? "1 hour" : "\(hours) hours"
+            return "\(daysText), \(hoursText)"
+        }
+
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+
+        return "\(minutes)m"
     }
 }

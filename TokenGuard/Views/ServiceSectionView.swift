@@ -3,6 +3,7 @@ import SwiftUI
 struct ServiceSectionView: View {
     let serviceType: ServiceType
     let accounts: [Account]
+    let referenceDate: Date
 
     @Environment(AccountStore.self) private var accountStore
     @Environment(ThemeManager.self) private var themeManager
@@ -75,7 +76,7 @@ struct ServiceSectionView: View {
 
     @ViewBuilder
     private func accountCard(account: Account, theme: Theme) -> some View {
-        AccountCardView(account: account)
+        AccountCardView(account: account, referenceDate: referenceDate)
     }
 
     @ViewBuilder

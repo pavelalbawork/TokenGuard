@@ -22,12 +22,15 @@ final class UsagePollingEngine {
     private let providers: [ServiceType: ServiceProvider]
     private let codexClient: CodexAppServerClient
     private let refreshIntervalProvider: @Sendable () -> TimeInterval?
+    private let identitySyncInterval: TimeInterval
     private let sleep: @Sendable (TimeInterval) async -> Void
 
     var serviceRefreshIntervals: [ServiceType: TimeInterval]
     var accountStates: [UUID: AccountRefreshState]
     var isRefreshing: Bool
+    var backgroundErrorMessage: String?
     private var pendingForceRefresh: Bool = false
+    private var lastIdentitySyncAt: [ServiceType: Date] = [:]
 
     @ObservationIgnored
     private var pollingTask: Task<Void, Never>?
@@ -54,6 +57,7 @@ final class UsagePollingEngine {
             let minutes = defaults.integer(forKey: "globalRefreshIntervalMins")
             return minutes > 0 ? TimeInterval(minutes * 60) : nil
         },
+        identitySyncInterval: TimeInterval = 60,
         sleep: @escaping @Sendable (TimeInterval) async -> Void = { interval in
             let nanoseconds = UInt64(max(interval, 0) * 1_000_000_000)
             try? await Task.sleep(nanoseconds: nanoseconds)
@@ -71,12 +75,14 @@ final class UsagePollingEngine {
         ]
         self.serviceRefreshIntervals = serviceRefreshIntervals
         self.refreshIntervalProvider = refreshIntervalProvider
+        self.identitySyncInterval = identitySyncInterval
         self.sleep = sleep
         self.accountStates = UsagePollingEngine.initialAccountStates(
             accounts: accountStore.accounts,
             snapshotCache: snapshotCache
         )
         self.isRefreshing = false
+        self.backgroundErrorMessage = nil
     }
 
     deinit {
@@ -126,7 +132,7 @@ final class UsagePollingEngine {
         var shouldForce = force
 
         repeat {
-            await synchronizeActiveConsumerAccounts()
+            await synchronizeActiveConsumerAccounts(force: shouldForce)
             if shouldForce {
                 await codexClient.requestImmediateRefresh()
             }
@@ -177,7 +183,7 @@ final class UsagePollingEngine {
     }
 
     func refresh(accountID: UUID) async {
-        await synchronizeActiveConsumerAccounts()
+        await synchronizeActiveConsumerAccounts(force: true)
 
         guard let account = accountStore.accounts.first(where: { $0.id == accountID }),
               let provider = providers[account.serviceType] else {
@@ -231,7 +237,12 @@ final class UsagePollingEngine {
             state.errorMessage = nil
             state.lastSuccessAt = snapshot.timestamp
             state.connectionStatus = nil
-            try? snapshotCache.save(snapshot: snapshot)
+            do {
+                try snapshotCache.save(snapshot: snapshot)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not save usage snapshot", error)
+            }
         case let .failure(error):
             if let snapshot = state.snapshot {
                 state.snapshot = snapshot.markingStale(true)
@@ -257,13 +268,18 @@ final class UsagePollingEngine {
         return max(activeIntervals.min() ?? 300, 1)
     }
 
-    private func synchronizeActiveConsumerAccounts() async {
+    private func synchronizeActiveConsumerAccounts(force: Bool = false) async {
         let consumerAccountsByService = Dictionary(
             grouping: accountStore.accounts.filter { $0.isEnabled && $0.planType == "consumer" },
             by: \.serviceType
         )
 
         for (serviceType, accounts) in consumerAccountsByService where accounts.count > 1 {
+            if !force, shouldSkipIdentitySync(for: serviceType) {
+                continue
+            }
+            lastIdentitySyncAt[serviceType] = Date()
+
             let identity: ConsumerAccountIdentity?
             if serviceType == .codex {
                 let liveIdentity = await codexClient.currentState().identity
@@ -288,14 +304,31 @@ final class UsagePollingEngine {
             }
 
             if accountStore.activeConsumerAccountID(for: serviceType) != matchedAccount.id {
-                try? accountStore.setActiveConsumer(matchedAccount.id, for: serviceType)
+                do {
+                    try accountStore.setActiveConsumer(matchedAccount.id, for: serviceType)
+                    backgroundErrorMessage = nil
+                } catch {
+                    recordBackgroundError("Could not update active \(serviceType.rawValue) account", error)
+                }
             }
 
             let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
             if updatedAccount != matchedAccount {
-                try? accountStore.update(updatedAccount)
+                do {
+                    try accountStore.update(updatedAccount)
+                    backgroundErrorMessage = nil
+                } catch {
+                    recordBackgroundError("Could not save \(serviceType.rawValue) account identity", error)
+                }
             }
         }
+    }
+
+    private func shouldSkipIdentitySync(for serviceType: ServiceType) -> Bool {
+        guard let lastSync = lastIdentitySyncAt[serviceType] else {
+            return false
+        }
+        return Date().timeIntervalSince(lastSync) < identitySyncInterval
     }
 
     private func matchingConsumerAccount(for identity: ConsumerAccountIdentity, in accounts: [Account]) -> Account? {
@@ -395,7 +428,12 @@ final class UsagePollingEngine {
            let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
             let previousActiveID = accountStore.activeConsumerAccountID(for: .codex)
             if previousActiveID != matchedAccount.id {
-                try? accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
+                do {
+                    try accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
+                    backgroundErrorMessage = nil
+                } catch {
+                    recordBackgroundError("Could not update active Codex account", error)
+                }
 
                 // Keep the old account's snapshot (as stale) so the UI can
                 // still show last-known data. Only clear the live connection
@@ -426,7 +464,12 @@ final class UsagePollingEngine {
 
             let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
             if updatedAccount != matchedAccount {
-                try? accountStore.update(updatedAccount)
+                do {
+                    try accountStore.update(updatedAccount)
+                    backgroundErrorMessage = nil
+                } catch {
+                    recordBackgroundError("Could not save Codex account identity", error)
+                }
             }
         }
 
@@ -452,7 +495,12 @@ final class UsagePollingEngine {
             state.snapshot = snapshot
             state.lastSuccessAt = snapshot.timestamp
             state.errorMessage = liveState.status == .error ? liveState.lastErrorText : nil
-            try? snapshotCache.save(snapshot: snapshot)
+            do {
+                try snapshotCache.save(snapshot: snapshot)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not save Codex live snapshot", error)
+            }
         } else if let existingSnapshot = state.snapshot {
             state.snapshot = existingSnapshot.markingStale(liveState.status != .live)
             if liveState.status == .error {
@@ -466,5 +514,9 @@ final class UsagePollingEngine {
 
         updatedStates[activeAccountID] = state
         accountStates = updatedStates
+    }
+
+    private func recordBackgroundError(_ context: String, _ error: Error) {
+        backgroundErrorMessage = "\(context): \(error.localizedDescription)"
     }
 }

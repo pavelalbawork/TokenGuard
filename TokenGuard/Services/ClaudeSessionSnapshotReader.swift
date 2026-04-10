@@ -15,14 +15,20 @@ import Foundation
 struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
     private let rootDirectoryURL: URL
     private let now: @Sendable () -> Date
+    private let cache: SnapshotReaderTTLCache
+    private let cacheTTL: TimeInterval
 
     init(
         rootDirectoryURL: URL = URL(fileURLWithPath:
             NSString(string: "~/.claude/projects").expandingTildeInPath),
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        cache: SnapshotReaderTTLCache = SnapshotReaderTTLCache(),
+        cacheTTL: TimeInterval = 30
     ) {
         self.rootDirectoryURL = rootDirectoryURL
         self.now = now
+        self.cache = cache
+        self.cacheTTL = cacheTTL
     }
 
     func windows(for serviceType: ServiceType) throws -> [UsageWindow]? {
@@ -32,6 +38,11 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
         guard fileManager.fileExists(atPath: rootDirectoryURL.path) else { return nil }
 
         let currentTime = now()
+        let cacheKey = "\(serviceType.rawValue):\(rootDirectoryURL.path)"
+        if let cached = cache.value(key: cacheKey, now: currentTime, ttl: cacheTTL) {
+            return cached
+        }
+
         let cutoff5h = currentTime.addingTimeInterval(-5 * 3600)
         let cutoff7d  = currentTime.addingTimeInterval(-7 * 24 * 3600)
 
@@ -72,9 +83,12 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
             }
         }
 
-        guard tokens7d > 0 else { return nil }
+        guard tokens7d > 0 else {
+            cache.store(nil, key: cacheKey, now: currentTime)
+            return nil
+        }
 
-        return [
+        let result = [
             UsageWindow(
                 windowType: .rolling5h,
                 used: tokens5h,
@@ -92,6 +106,8 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
                 label: "7-day tokens"
             )
         ]
+        cache.store(result, key: cacheKey, now: currentTime)
+        return result
     }
 
     // MARK: - Private
