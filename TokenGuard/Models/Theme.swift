@@ -126,26 +126,26 @@ extension Theme {
         error: Color(hex: "#d93025")
     )
     
-    public static let burgundyLight = Theme(
-        id: "burgundyLight",
-        name: "Light: Burgundy Minimal",
+    public static let steelCrimson = Theme(
+        id: "steelCrimson",
+        name: "Light: Steel & Crimson",
         isLight: true,
-        backgroundMain: Color(hex: "#b8b2b4"),     // Very dark gray for a light theme
-        surface: Color(hex: "#cfc9cb"),            // Elevated lighter gray
-        surfaceContainer: Color(hex: "#a6a0a2"),   // Deep inset background
-        surfaceContainerHigh: Color(hex: "#969092"),
-        textPrimary: Color(hex: "#140c0d"),        // Near black
-        textSecondary: Color(hex: "#3d2d31"),      // Extremely dark grey/brown
-        primaryAccent: Color(hex: "#800020"),      // Burgundy
-        secondaryAccent: Color(hex: "#b30030"),    // Lighter burgundy
-        tertiaryAccent: Color(hex: "#4d0013"),     // Darker burgundy
-        border: Color(hex: "#8a8386"),
-        error: Color(hex: "#b91c1c")
+        backgroundMain: Color(hex: "#c6cbd1"),     // Deep aluminum gray
+        surface: Color(hex: "#dce0e5"),            // Lighter brushed steel surface
+        surfaceContainer: Color(hex: "#b0b6be"),   // Inset cool gray
+        surfaceContainerHigh: Color(hex: "#9aa3ac"), // Deep inset cool gray
+        textPrimary: Color(hex: "#16191d"),        // Near black, cool tinted
+        textSecondary: Color(hex: "#434b54"),      // Slate gray text
+        primaryAccent: Color(hex: "#c81e36"),      // Vibrant sportscar crimson
+        secondaryAccent: Color(hex: "#e02b46"),    // Brighter ruby red
+        tertiaryAccent: Color(hex: "#9b1629"),     // Deep blood red
+        border: Color(hex: "#a1a8b0"),
+        error: Color(hex: "#d93025")
     )
     
     public static let all: [Theme] = [
         .luminous, .nordicFrost, .obsidianSilver, .mintTerminal,
-        .minimalLight, .burgundyLight
+        .minimalLight, .steelCrimson
     ]
 }
 
