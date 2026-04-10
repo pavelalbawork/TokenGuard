@@ -5,7 +5,7 @@ struct SettingsView: View {
     @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
     
-    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
     @AppStorage("globalRefreshIntervalMins") private var refreshIntervalMins: Int = 15
     
@@ -13,12 +13,48 @@ struct SettingsView: View {
     @State private var launchAtLoginError: String?
 
     var body: some View {
+        @Bindable var bindableThemeManager = themeManager
         let theme = themeManager.currentTheme
         
         VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("SETTINGS")
+                    .font(.system(size: 14, weight: .black))
+                    .tracking(1.0)
+                    .foregroundStyle(theme.textPrimary)
+
+                Text("Adjust how TokenGuard looks, refreshes, and organizes providers.")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(theme.textSecondary.opacity(0.9))
+            }
+
+            // Section: Appearance
+            VStack(alignment: .leading, spacing: 8) {
+                sectionHeader("Appearance", theme: theme)
+
+                HStack {
+                    Text("Theme")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
+                    Spacer()
+                    Picker("", selection: $bindableThemeManager.selectedThemeId) {
+                        ForEach(Theme.all) { item in
+                            Text(item.name).tag(item.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                .padding(10)
+                .background(settingsRowBackground(for: theme))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
+            }
+
             // Section: Startup
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("Startup", theme: theme)
+                sectionHeader("Launch", theme: theme)
                 
                 HStack {
                     Text("Launch at login")
@@ -31,9 +67,9 @@ struct SettingsView: View {
                         .controlSize(.small)
                 }
                 .padding(10)
-                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
+                .background(settingsRowBackground(for: theme))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
                 .onChange(of: launchAtLogin) { _, newValue in
                     launchAtLoginError = nil
                     do {
@@ -58,7 +94,7 @@ struct SettingsView: View {
             
             // Section: Data
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("Data", theme: theme)
+                sectionHeader("Updates", theme: theme)
                 
                 HStack {
                     Text("Refresh Interval")
@@ -77,14 +113,20 @@ struct SettingsView: View {
                     .fixedSize()
                 }
                 .padding(10)
-                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
+                .background(settingsRowBackground(for: theme))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
             }
             
             // Section: Provider Order
             VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("Provider Display Order", theme: theme)
+                HStack {
+                    sectionHeader("Provider Order", theme: theme)
+                    Spacer()
+                    Text("Use arrows to reorder")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                }
                 
                 VStack(spacing: 0) {
                     ForEach(Array(orderedServices.enumerated()), id: \.element) { index, service in
@@ -100,27 +142,19 @@ struct SettingsView: View {
                                 .foregroundStyle(theme.textPrimary)
                                 
                             Spacer()
-                            
-                            HStack(spacing: 6) {
-                                Button(action: { moveUp(service) }) {
-                                    Image(systemName: "chevron.up")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(index == 0 ? theme.textSecondary.opacity(0.2) : theme.textSecondary)
+
+                            HStack(spacing: 8) {
+                                reorderButton(systemName: "chevron.up", isDisabled: index == 0, theme: theme) {
+                                    move(service, by: -1)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(index == 0)
-                                
-                                Button(action: { moveDown(service) }) {
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundStyle(index == orderedServices.count - 1 ? theme.textSecondary.opacity(0.2) : theme.textSecondary)
+
+                                reorderButton(systemName: "chevron.down", isDisabled: index == orderedServices.count - 1, theme: theme) {
+                                    move(service, by: 1)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(index == orderedServices.count - 1)
                             }
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 7)
                         
                         if index < orderedServices.count - 1 {
                             Divider()
@@ -129,9 +163,9 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
+                .background(settingsRowBackground(for: theme))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
             }
         }
         .onAppear {
@@ -152,26 +186,48 @@ struct SettingsView: View {
     @ViewBuilder
     private func sectionHeader(_ title: String, theme: Theme) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: 9, weight: .heavy))
             .tracking(1.5)
-            .foregroundStyle(theme.textSecondary)
+            .foregroundStyle(theme.textPrimary.opacity(0.8))
     }
-    
-    private func moveUp(_ service: ServiceType) {
-        guard let index = orderedServices.firstIndex(of: service), index > 0 else { return }
+
+    @ViewBuilder
+    private func reorderButton(systemName: String, isDisabled: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(isDisabled ? theme.textSecondary.opacity(0.3) : theme.textPrimary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(theme.isLight ? theme.surfaceContainerHigh.opacity(0.5) : theme.surfaceContainerHigh.opacity(0.45))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .contentShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func move(_ service: ServiceType, by offset: Int) {
+        guard let index = orderedServices.firstIndex(of: service) else { return }
+        let destination = index + offset
+        guard orderedServices.indices.contains(destination) else { return }
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            orderedServices.swapAt(index, index - 1)
-            providerOrderStr = orderedServices.map { $0.rawValue }.joined(separator: ",")
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+            orderedServices.swapAt(index, destination)
+            persistProviderOrder()
         }
     }
-    
-    private func moveDown(_ service: ServiceType) {
-        guard let index = orderedServices.firstIndex(of: service), index < orderedServices.count - 1 else { return }
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            orderedServices.swapAt(index, index + 1)
-            providerOrderStr = orderedServices.map { $0.rawValue }.joined(separator: ",")
-        }
+
+    private func persistProviderOrder() {
+        providerOrderStr = orderedServices.map { $0.rawValue }.joined(separator: ",")
+    }
+
+    private func settingsRowBackground(for theme: Theme) -> Color {
+        theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.35)
+    }
+
+    private func settingsBorder(for theme: Theme) -> Color {
+        theme.isLight ? theme.border : theme.border
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 enum NavigationTab: String, CaseIterable {
     case usage = "USAGE"
     case accounts = "ACCOUNTS"
+    case settings = "SETTINGS"
 }
 
 struct MainPopoverView: View {
@@ -11,25 +12,22 @@ struct MainPopoverView: View {
     @Environment(ThemeManager.self) private var themeManager
     
     @State private var selectedTab: NavigationTab = .usage
-    @State private var showSettings = false // Drives inline settings display if clicked from header
     @State private var isAddingAccount = false
     @Namespace private var animationNameSpace
 
     @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
 
     var body: some View {
-        @Bindable var bindableThemeManager = themeManager
         let theme = themeManager.currentTheme
         
         VStack(spacing: 0) {
             // Header: tabs on left, actions on right
             HStack(spacing: 0) {
                 // Navigation tabs
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     ForEach(NavigationTab.allCases, id: \.self) { tab in
-                        headerTabButton(title: tab.rawValue, isSelected: selectedTab == tab && !showSettings && !isAddingAccount, theme: theme) {
+                        headerTabButton(title: tab.rawValue, isSelected: selectedTab == tab && !isAddingAccount, theme: theme) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                showSettings = false
                                 isAddingAccount = false
                                 selectedTab = tab
                             }
@@ -53,26 +51,13 @@ struct MainPopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(theme.textSecondary)
-
-                    Menu {
-                        Picker("Theme", selection: $bindableThemeManager.selectedThemeId) {
-                            ForEach(Theme.all) { t in
-                                Text(t.name).tag(t.id)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "paintpalette")
-                            .font(.system(size: 13, weight: .light))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(theme.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
 
                     Button(action: {
                         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             isAddingAccount = true
-                            showSettings = false
                         }
                     }) {
                         Image(systemName: "plus.circle")
@@ -81,20 +66,9 @@ struct MainPopoverView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(theme.textSecondary)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
                     
-                    Button(action: {
-                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            showSettings.toggle()
-                            if showSettings { isAddingAccount = false }
-                        }
-                    }) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13, weight: .light))
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(showSettings ? theme.primaryAccent : theme.textSecondary)
                 }
             }
             .padding(.horizontal, 12)
@@ -105,88 +79,79 @@ struct MainPopoverView: View {
             .zIndex(1)
 
             // Main Content Area
-            if showSettings {
-                // Item 8: explicitly inject environments so SettingsView is safe if ever detached
-                ScrollView {
-                    SettingsView()
-                        .environment(accountStore)
-                        .environment(pollingEngine)
-                        .environment(themeManager)
-                        .padding(16)
-                }
-                .scrollIndicators(.hidden)
-            } else {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        if !heroServiceTypes.isEmpty {
-                            GlobalUsageHeroView()
-                        }
-                        
-                        // Router Content
-                        Group {
-                            if isAddingAccount {
-                                InlineAddAccountView(
-                                    onCancel: {
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            isAddingAccount = false
-                                        }
-                                    },
-                                    onComplete: { 
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            isAddingAccount = false
-                                            selectedTab = .usage
-                                        }
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !heroServiceTypes.isEmpty {
+                        GlobalUsageHeroView()
+                    }
+                    
+                    // Router Content
+                    Group {
+                        if isAddingAccount {
+                            InlineAddAccountView(
+                                onCancel: {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        isAddingAccount = false
                                     }
-                                )
-                            } else if selectedTab == .usage {
-                                if accountStore.accounts.isEmpty {
-                                    Button(action: {
-                                        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-                                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                            isAddingAccount = true
-                                        }
-                                    }) {
-                                        VStack(spacing: 16) {
-                                            Image(systemName: "plus.circle")
-                                                .font(.system(size: 32, weight: .ultraLight))
-                                                .symbolRenderingMode(.hierarchical)
-                                            Text("No accounts configured yet. Click to add.")
-                                        }
-                                        .foregroundStyle(theme.textSecondary)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.top, 40)
-                                } else {
-                                    VStack(alignment: .leading, spacing: 24) {
-                                        let orderKeys = providerOrderStr.components(separatedBy: ",")
-                                        let sortedTypes = ServiceType.allCases.sorted { a, b in
-                                            let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
-                                            let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
-                                            return idxA < idxB
-                                        }
-                                        let serviceTypes = sortedTypes.filter { serviceType in
-                                            accountStore.accounts.contains { $0.serviceType == serviceType }
-                                        }
-                                        ForEach(serviceTypes, id: \.self) { serviceType in
-                                            ServiceSectionView(
-                                                serviceType: serviceType,
-                                                accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
-                                            )
-                                        }
+                                },
+                                onComplete: { 
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        isAddingAccount = false
+                                        selectedTab = .usage
                                     }
                                 }
-                            } else if selectedTab == .accounts {
-                                AccountEditScreen()
+                            )
+                        } else if selectedTab == .usage {
+                            if accountStore.accounts.isEmpty {
+                                Button(action: {
+                                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        isAddingAccount = true
+                                    }
+                                }) {
+                                    VStack(spacing: 16) {
+                                        Image(systemName: "plus.circle")
+                                            .font(.system(size: 32, weight: .ultraLight))
+                                            .symbolRenderingMode(.hierarchical)
+                                        Text("No accounts configured yet. Click to add.")
+                                    }
+                                    .foregroundStyle(theme.textSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 40)
+                            } else {
+                                VStack(alignment: .leading, spacing: 22) {
+                                    let orderKeys = providerOrderStr.components(separatedBy: ",")
+                                    let sortedTypes = ServiceType.allCases.sorted { a, b in
+                                        let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
+                                        let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
+                                        return idxA < idxB
+                                    }
+                                    let serviceTypes = sortedTypes.filter { serviceType in
+                                        accountStore.accounts.contains { $0.serviceType == serviceType }
+                                    }
+                                    ForEach(serviceTypes, id: \.self) { serviceType in
+                                        ServiceSectionView(
+                                            serviceType: serviceType,
+                                            accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
+                                        )
+                                    }
+                                }
                             }
+                        } else if selectedTab == .accounts {
+                            PopoverAccountEditScreen()
+                        } else if selectedTab == .settings {
+                            SettingsView()
                         }
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAddingAccount)
                     }
-                    .padding(16)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAddingAccount)
                 }
-                .scrollIndicators(.hidden)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
             }
+            .scrollIndicators(.hidden)
             
             // Footer
             HStack {
@@ -240,20 +205,125 @@ struct MainPopoverView: View {
                 .font(.system(size: 9, weight: .bold))
                 .tracking(1.5)
                 .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.6))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 12)
+                .frame(height: 34)
+                .frame(minWidth: 80)
                 .background(
                     ZStack {
                         if isSelected {
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: 7)
                                 .fill(theme.surfaceContainerHigh)
                                 .matchedGeometryEffect(id: "TabHighlight", in: animationNameSpace)
                         }
                     }
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 7))
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct PopoverAccountEditScreen: View {
+    @Environment(AccountStore.self) private var accountStore
+    @Environment(ThemeManager.self) private var themeManager
+
+    var body: some View {
+        let theme = themeManager.currentTheme
+
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ACCOUNTS")
+                    .font(.system(size: 14, weight: .black))
+                    .tracking(1.0)
+                    .foregroundStyle(theme.textPrimary)
+
+                Text("Manage linked accounts and optional display names.")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .padding(.horizontal, 16)
+
+            VStack(spacing: 12) {
+                ForEach(accountStore.accounts) { account in
+                    PopoverAccountEditRow(account: account, theme: theme)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+        .padding(.top, 16)
+    }
+}
+
+struct PopoverAccountEditRow: View {
+    let account: Account
+    let theme: Theme
+
+    @Environment(AccountStore.self) private var accountStore
+    @Environment(UsagePollingEngine.self) private var pollingEngine
+
+    @State private var alias: String = ""
+    @State private var isDeleteConfirmationPresented = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: account.serviceType.iconName)
+                    .rotationEffect(.degrees(account.serviceType.rotationAngle))
+                    .foregroundStyle(account.serviceType.tintColor(for: theme))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account.serviceType.rawValue.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(theme.textSecondary)
+                    Text(account.consumerEmail ?? account.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.textPrimary)
+                }
+                Spacer()
+
+                Button(action: { isDeleteConfirmationPresented = true }) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(theme.error.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("ALIAS")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(theme.textSecondary)
+
+                TextField("Enter Alias (Optional)", text: $alias)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(8)
+                    .background(theme.isLight ? theme.surfaceContainer : theme.backgroundMain)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
+                    .onChange(of: alias) { _, newValue in
+                        var updated = account
+                        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.alias = trimmed.isEmpty ? nil : trimmed
+                        try? accountStore.update(updated)
+                    }
+            }
+        }
+        .padding(12)
+        .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
+        .alert("Delete account?", isPresented: $isDeleteConfirmationPresented) {
+            Button("Delete", role: .destructive) {
+                try? pollingEngine.deleteAccount(account)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the saved account and its local state.")
+        }
+        .onAppear {
+            alias = account.alias ?? ""
+        }
     }
 }
 
@@ -333,7 +403,9 @@ struct GlobalUsageHeroView: View {
             return idxA < idxB
         }
 
-        HStack(alignment: .top, spacing: 16) {
+        let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+        LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
             ForEach(sortedServices, id: \.self) { service in
                 if service == .codex {
                     UnifiedConcentricGauge(
@@ -392,7 +464,7 @@ struct GlobalUsageHeroView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 24)
+        .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3)) // Ultra luxury finish
