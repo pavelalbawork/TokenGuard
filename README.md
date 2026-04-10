@@ -15,7 +15,7 @@ Rather than asking for API keys or cloud syncing, TokenGuard reads local state f
       <p><strong>Why it earns a spot in your menu bar</strong></p>
       <ul>
         <li>One glance to see remaining capacity across Codex, Claude, Gemini CLI, and Antigravity.</li>
-        <li>Real remaining-time windows and reset timing instead of hunting through separate tools.</li>
+        <li>Remaining-time windows and reset timing where local provider state exposes them.</li>
         <li>Local-first account tracking with no analytics, hosted dashboard, or extra API setup.</li>
         <li>Best for developers who actively switch between AI tools and want fast operational visibility.</li>
       </ul>
@@ -52,16 +52,12 @@ AI coding tools expose usage in different places. Some usage lives in local CLI 
 - **Codex**: Tracks active Codex account/session usage and plan windows from local state.
 - **Gemini CLI**: Tracks local Gemini CLI usage limits for the signed-in local account.
 - **Antigravity**: Tracks local Antigravity usage state.
-- *(More can be added via the custom provider framework)*
 
 ## Installation
 
-TokenGuard is distributed directly through GitHub Releases.
+The source repo is public now. Prebuilt app releases will be published through [GitHub Releases](https://github.com/pavelalbawork/TokenGuard/releases) once the first downloadable package is ready.
 
-1. Go to the [Releases page](https://github.com/pavelalbawork/TokenGuard/releases).
-2. Download the latest `TokenGuard.zip` release artifact.
-3. Unzip the file and drag `TokenGuard.app` to your `Applications` folder.
-4. Launch the app. It will appear in your macOS menu bar.
+Until then, build from source using the steps below.
 
 ## Setup & Prerequisites
 
