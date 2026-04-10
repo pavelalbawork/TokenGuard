@@ -115,7 +115,12 @@ final class UsagePollingEngineTests: XCTestCase {
             accountStore: accountStore,
             keychainManager: keychainManager,
             codexClient: codexClient,
-            providers: [.codex: OpenAIProvider(codexLiveStateProvider: codexClient)],
+            providers: [
+                .codex: OpenAIProvider(
+                    codexLiveStateProvider: codexClient,
+                    identityReader: CodexAuthIdentityReader(authURL: tempDirectory.appendingPathComponent("missing-auth.json"))
+                )
+            ],
             serviceRefreshIntervals: [.codex: 300],
             sleep: { _ in }
         )
@@ -182,7 +187,12 @@ final class UsagePollingEngineTests: XCTestCase {
             accountStore: accountStore,
             keychainManager: keychainManager,
             codexClient: codexClient,
-            providers: [.codex: OpenAIProvider(codexLiveStateProvider: codexClient)],
+            providers: [
+                .codex: OpenAIProvider(
+                    codexLiveStateProvider: codexClient,
+                    identityReader: CodexAuthIdentityReader(authURL: tempDirectory.appendingPathComponent("missing-auth.json"))
+                )
+            ],
             serviceRefreshIntervals: [.codex: 300],
             sleep: { _ in }
         )
@@ -283,7 +293,8 @@ final class UsagePollingEngineTests: XCTestCase {
 
         engine.start()
         let didSeeOldLiveIdentity = await waitUntil {
-            accountStore.activeConsumerAccountID(for: .codex) == oldAccount.id
+            accountStore.activeConsumerAccountID(for: .codex) == oldAccount.id &&
+            !engine.isRefreshing
         }
 
         XCTAssertTrue(didSeeOldLiveIdentity)

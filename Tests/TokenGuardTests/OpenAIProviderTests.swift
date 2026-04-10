@@ -342,4 +342,22 @@ final class OpenAIProviderTests: XCTestCase {
         }
         XCTAssertTrue(sawReconnect)
     }
+
+    private static func jwt(email: String) -> String {
+        let header = #"{"alg":"none"}"#
+        let payload = #"{"email":"\#(email)"}"#
+        return [
+            base64URL(header),
+            base64URL(payload),
+            "signature"
+        ].joined(separator: ".")
+    }
+
+    private static func base64URL(_ value: String) -> String {
+        Data(value.utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
 }

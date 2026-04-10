@@ -454,54 +454,29 @@ final class UsagePollingEngine {
 
         guard !codexAccounts.isEmpty else { return }
 
+        let localIdentity: ConsumerAccountIdentity?
+        if let detector = providers[.codex] as? any ConsumerAccountDetecting {
+            localIdentity = try? await detector.currentConsumerIdentity()
+        } else {
+            localIdentity = nil
+        }
+
+        if identitiesConflict(localIdentity, liveState.identity) {
+            if codexAccounts.count > 1,
+               let localIdentity,
+               let matchedAccount = matchingConsumerAccount(for: localIdentity, in: codexAccounts) {
+                activateCodexConsumerAccount(matchedAccount, identity: localIdentity)
+            }
+            await codexClient.restart()
+            return
+        }
+
+        let effectiveIdentity = localIdentity ?? liveState.identity
+
         if codexAccounts.count > 1,
-           let identity = liveState.identity,
+           let identity = effectiveIdentity,
            let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
-            let previousActiveID = accountStore.activeConsumerAccountID(for: .codex)
-            if previousActiveID != matchedAccount.id {
-                do {
-                    try accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
-                    backgroundErrorMessage = nil
-                } catch {
-                    recordBackgroundError("Could not update active Codex account", error)
-                }
-
-                // Keep the old account's snapshot (as stale) so the UI can
-                // still show last-known data. Only clear the live connection
-                // status so the LIVE badge and error go away.
-                if let previousActiveID {
-                    var updatedStates = accountStates
-                    var oldState = updatedStates[previousActiveID] ?? {
-                        // Seed from the on-disk snapshot cache if available.
-                        if let cached = (try? snapshotCache.load())?[previousActiveID] {
-                            return AccountRefreshState(
-                                snapshot: cached.markingStale(true),
-                                errorMessage: nil,
-                                lastAttemptAt: nil,
-                                lastSuccessAt: cached.timestamp
-                            )
-                        }
-                        return AccountRefreshState()
-                    }()
-                    if let snap = oldState.snapshot {
-                        oldState.snapshot = snap.markingStale(true)
-                    }
-                    oldState.connectionStatus = nil
-                    oldState.errorMessage = nil
-                    updatedStates[previousActiveID] = oldState
-                    accountStates = updatedStates
-                }
-            }
-
-            let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
-            if updatedAccount != matchedAccount {
-                do {
-                    try accountStore.update(updatedAccount)
-                    backgroundErrorMessage = nil
-                } catch {
-                    recordBackgroundError("Could not save Codex account identity", error)
-                }
-            }
+            activateCodexConsumerAccount(matchedAccount, identity: identity)
         }
 
         guard let activeAccountID = accountStore.activeConsumerAccountID(for: .codex),
@@ -545,6 +520,53 @@ final class UsagePollingEngine {
 
         updatedStates[activeAccountID] = state
         accountStates = updatedStates
+    }
+
+    private func activateCodexConsumerAccount(_ matchedAccount: Account, identity: ConsumerAccountIdentity) {
+        let previousActiveID = accountStore.activeConsumerAccountID(for: .codex)
+        if previousActiveID != matchedAccount.id {
+            do {
+                try accountStore.setActiveConsumer(matchedAccount.id, for: .codex)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not update active Codex account", error)
+            }
+
+            // Keep the old account's snapshot (as stale) so the UI can still show
+            // last-known data. Only clear the live connection status so the LIVE
+            // badge and error go away.
+            if let previousActiveID {
+                var updatedStates = accountStates
+                var oldState = updatedStates[previousActiveID] ?? {
+                    if let cached = (try? snapshotCache.load())?[previousActiveID] {
+                        return AccountRefreshState(
+                            snapshot: cached.markingStale(true),
+                            errorMessage: nil,
+                            lastAttemptAt: nil,
+                            lastSuccessAt: cached.timestamp
+                        )
+                    }
+                    return AccountRefreshState()
+                }()
+                if let snap = oldState.snapshot {
+                    oldState.snapshot = snap.markingStale(true)
+                }
+                oldState.connectionStatus = nil
+                oldState.errorMessage = nil
+                updatedStates[previousActiveID] = oldState
+                accountStates = updatedStates
+            }
+        }
+
+        let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
+        if updatedAccount != matchedAccount {
+            do {
+                try accountStore.update(updatedAccount)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not save Codex account identity", error)
+            }
+        }
     }
 
     private func recordBackgroundError(_ context: String, _ error: Error) {
