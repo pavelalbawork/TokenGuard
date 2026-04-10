@@ -1,4 +1,4 @@
-name: UsageTool
+name: TokenGuard
 options:
   bundleIdPrefix: com.palba
   deploymentTarget:
@@ -10,39 +10,44 @@ settings:
   base:
     SWIFT_VERSION: 6.0
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
 targets:
-  UsageTool:
+  TokenGuard:
     type: application
     platform: macOS
     sources:
-      - path: UsageTool
+      - path: TokenGuard
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.palba.UsageTool
-        PRODUCT_NAME: UsageTool
+        PRODUCT_BUNDLE_IDENTIFIER: com.palba.TokenGuard
+        PRODUCT_NAME: TokenGuard
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: UsageTool
+        INFOPLIST_KEY_CFBundleShortVersionString: $(MARKETING_VERSION)
+        INFOPLIST_KEY_CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        INFOPLIST_KEY_CFBundleDisplayName: TokenGuard
         INFOPLIST_KEY_LSUIElement: YES
         CODE_SIGN_STYLE: Automatic
         SWIFT_EMIT_LOC_STRINGS: NO
-  UsageToolTests:
+  TokenGuardTests:
     type: bundle.unit-test
     platform: macOS
     sources:
-      - path: Tests/UsageToolTests
+      - path: Tests/TokenGuardTests
     dependencies:
-      - target: UsageTool
+      - target: TokenGuard
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.palba.UsageToolTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.palba.TokenGuardTests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: ""
 schemes:
-  UsageTool:
+  TokenGuard:
     build:
       targets:
-        UsageTool: all
-        UsageToolTests: [test]
+        TokenGuard: all
+        TokenGuardTests: [test]
     test:
       targets:
-        - UsageToolTests
+        - TokenGuardTests

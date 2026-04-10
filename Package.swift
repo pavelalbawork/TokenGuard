@@ -2,30 +2,30 @@
 import PackageDescription
 
 let package = Package(
-    name: "UsageTool",
+    name: "TokenGuard",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "UsageTool",
-            targets: ["UsageTool"]
+            name: "TokenGuard",
+            targets: ["TokenGuard"]
         )
     ],
     targets: [
         .target(
-            name: "UsageTool",
-            path: "UsageTool",
+            name: "TokenGuard",
+            path: "TokenGuard",
             exclude: [
-                "UsageToolApp.swift",
+                "TokenGuardApp.swift",
                 "Views",
                 "Resources"
             ]
         ),
         .testTarget(
-            name: "UsageToolTests",
-            dependencies: ["UsageTool"],
-            path: "Tests/UsageToolTests"
+            name: "TokenGuardTests",
+            dependencies: ["TokenGuard"],
+            path: "Tests/TokenGuardTests"
         )
     ]
 )
