@@ -365,9 +365,9 @@ struct GlobalUsageHeroView: View {
                     UnifiedConcentricGauge(
                         title: "GEMINI",
                         icon: ServiceType.gemini.iconName,
-                        outerLabel: "DAY",
-                        middleLabel: nil,
-                        innerLabel: nil,
+                        outerLabel: "PRO",
+                        middleLabel: "FLASH",
+                        innerLabel: "LITE",
                         metrics: gemini,
                         theme: theme,
                         baseColor: theme.secondaryAccent.opacity(0.4),
@@ -402,7 +402,9 @@ struct GlobalUsageHeroView: View {
     private func calculateMetrics() -> (codex: ProviderMetrics, claude: ProviderMetrics, gemini: ProviderMetrics, ag: ProviderMetrics) {
         var c_shortTot = 0.0, c_shortCnt = 0, c_longTot = 0.0, c_longCnt = 0
         var cl_shortTot = 0.0, cl_shortCnt = 0, cl_longTot = 0.0, cl_longCnt = 0
-        var geminiDailyTot = 0.0, geminiDailyCnt = 0
+        var g_proTot = 0.0, g_proCnt = 0
+        var g_flashTot = 0.0, g_flashCnt = 0
+        var g_liteTot = 0.0, g_liteCnt = 0
         var ag_claudeTot = 0.0, ag_claudeCnt = 0
         var ag_geminiProTot = 0.0, ag_geminiProCnt = 0
         var ag_geminiFlashTot = 0.0, ag_geminiFlashCnt = 0
@@ -447,9 +449,14 @@ struct GlobalUsageHeroView: View {
                 }
             } else if account.serviceType == .gemini {
                 for window in snapshot.windows {
-                    guard let progress = window.percentUsed else { continue }
-                    geminiDailyTot += progress
-                    geminiDailyCnt += 1
+                    guard let progress = window.percentUsed, let label = window.label else { continue }
+                    if label == "PRO" {
+                        g_proTot += progress; g_proCnt += 1
+                    } else if label == "FLASH" {
+                        g_flashTot += progress; g_flashCnt += 1
+                    } else if label == "LITE" {
+                        g_liteTot += progress; g_liteCnt += 1
+                    }
                 }
             } else if account.serviceType == .antigravity {
                 for window in snapshot.windows {
@@ -478,7 +485,9 @@ struct GlobalUsageHeroView: View {
         if let outer = claude.outerTerm, outer >= 1.0 { claude.isMiddleGrayedOut = true }
 
         let gemini = ProviderMetrics(
-            outerTerm: geminiDailyCnt > 0 ? (geminiDailyTot / Double(geminiDailyCnt)) : nil
+            outerTerm: g_proCnt > 0 ? (g_proTot / Double(g_proCnt)) : nil,
+            middleTerm: g_flashCnt > 0 ? (g_flashTot / Double(g_flashCnt)) : nil,
+            innerTerm: g_liteCnt > 0 ? (g_liteTot / Double(g_liteCnt)) : nil
         )
 
         let ag = ProviderMetrics(
