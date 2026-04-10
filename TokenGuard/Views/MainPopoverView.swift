@@ -444,8 +444,8 @@ struct GlobalUsageHeroView: View {
                         innerLabel: nil,
                         metrics: codex,
                         theme: theme,
-                        baseColor: theme.primaryAccent.opacity(0.3),
-                        accentColor: theme.primaryAccent
+                        baseColor: ServiceType.codex.tintColor(for: theme).opacity(0.3),
+                        accentColor: ServiceType.codex.tintColor(for: theme)
                     )
                     .frame(maxWidth: .infinity)
                 } else if service == .claude {
@@ -457,8 +457,8 @@ struct GlobalUsageHeroView: View {
                         innerLabel: nil,
                         metrics: claude,
                         theme: theme,
-                        baseColor: theme.primaryAccent.opacity(0.3),
-                        accentColor: theme.primaryAccent.opacity(0.8)
+                        baseColor: ServiceType.claude.tintColor(for: theme).opacity(0.3),
+                        accentColor: ServiceType.claude.tintColor(for: theme)
                     )
                     .frame(maxWidth: .infinity)
                 } else if service == .gemini {
@@ -470,7 +470,7 @@ struct GlobalUsageHeroView: View {
                         innerLabel: "LITE",
                         metrics: gemini,
                         theme: theme,
-                        baseColor: theme.secondaryAccent.opacity(0.4),
+                        baseColor: ServiceType.gemini.tintColor(for: theme).opacity(0.3),
                         accentColor: ServiceType.gemini.tintColor(for: theme)
                     )
                     .frame(maxWidth: .infinity)
@@ -483,8 +483,8 @@ struct GlobalUsageHeroView: View {
                         innerLabel: "FLASH",
                         metrics: ag,
                         theme: theme,
-                        baseColor: theme.primaryAccent.opacity(0.3),
-                        accentColor: theme.primaryAccent.opacity(0.6),
+                        baseColor: ServiceType.antigravity.tintColor(for: theme).opacity(0.3),
+                        accentColor: ServiceType.antigravity.tintColor(for: theme),
                         rotation: ServiceType.antigravity.rotationAngle
                     )
                     .frame(maxWidth: .infinity)

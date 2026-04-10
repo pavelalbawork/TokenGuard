@@ -43,25 +43,9 @@ public struct Theme: Identifiable, Equatable, Sendable {
 }
 
 extension Theme {
-    public static let vantage = Theme(
-        id: "vantage",
-        name: "Classic: Vantage",
-        backgroundMain: Color(hex: "#0d0a16"),
-        surface: Color(hex: "#0d0a16"),
-        surfaceContainer: Color(hex: "#15111e"),
-        surfaceContainerHigh: Color(hex: "#1d1927"),
-        textPrimary: Color(hex: "#e7e0eb"),
-        textSecondary: Color(hex: "#c9c4d0"),
-        primaryAccent: Color(hex: "#e0b6ff"),
-        secondaryAccent: Color(hex: "#cbc2db"),
-        tertiaryAccent: Color(hex: "#4edea3"),
-        border: Color(white: 1.0, opacity: 0.05),
-        error: Color(hex: "#ffb4ab")
-    )
-    
     public static let luminous = Theme(
         id: "luminous",
-        name: "Classic: Luminous",
+        name: "Dark: Luminous",
         backgroundMain: Color(hex: "#030c14"),
         surface: Color(hex: "#030c14"),
         surfaceContainer: Color(hex: "#0a192f"),
@@ -77,7 +61,7 @@ extension Theme {
     
     public static let nordicFrost = Theme(
         id: "nordicFrost",
-        name: "Classic: Nordic Frost",
+        name: "Dark: Nordic Frost",
         backgroundMain: Color(hex: "#080e1a"),
         surface: Color(hex: "#080e1a"),
         surfaceContainer: Color(hex: "#0f172a"),
@@ -93,7 +77,7 @@ extension Theme {
 
     public static let obsidianSilver = Theme(
         id: "obsidianSilver",
-        name: "New: Obsidian Silver",
+        name: "Dark: Obsidian Silver",
         backgroundMain: Color(hex: "#0a0a0a"),
         surface: Color(hex: "#0a0a0a"),
         surfaceContainer: Color(hex: "#141414"),
@@ -107,25 +91,9 @@ extension Theme {
         error: Color(hex: "#ef4444")
     )
     
-    public static let royalAmethyst = Theme(
-        id: "royalAmethyst",
-        name: "New: Royal Amethyst",
-        backgroundMain: Color(hex: "#130b1c"),
-        surface: Color(hex: "#130b1c"),
-        surfaceContainer: Color(hex: "#1e112c"),
-        surfaceContainerHigh: Color(hex: "#2c1941"),
-        textPrimary: Color(hex: "#f8f4fc"),
-        textSecondary: Color(hex: "#bda8d6"),
-        primaryAccent: Color(hex: "#ffd700"),
-        secondaryAccent: Color(hex: "#e6c200"),
-        tertiaryAccent: Color(hex: "#ffdf33"),
-        border: Color(white: 1.0, opacity: 0.05),
-        error: Color(hex: "#ff4d4d")
-    )
-    
     public static let mintTerminal = Theme(
         id: "mintTerminal",
-        name: "New: Mint Terminal",
+        name: "Dark: Mint Terminal",
         backgroundMain: Color(hex: "#18181b"),
         surface: Color(hex: "#18181b"),
         surfaceContainer: Color(hex: "#27272a"),
@@ -139,24 +107,7 @@ extension Theme {
         error: Color(hex: "#f87171")
     )
 
-    // MARK: - Light Themes (MacOS Native)
-    
-    public static let systemLight = Theme(
-        id: "systemLight",
-        name: "Light: System Default",
-        isLight: true,
-        backgroundMain: Color(hex: "#f3f4f6"),
-        surface: Color(hex: "#ffffff"),
-        surfaceContainer: Color(hex: "#eef2f7"),
-        surfaceContainerHigh: Color(hex: "#dfe5ee"),
-        textPrimary: Color(hex: "#0f172a"),
-        textSecondary: Color(hex: "#334155"),
-        primaryAccent: Color(hex: "#0a65cc"), // Apple Blue
-        secondaryAccent: Color(hex: "#0f4c81"),
-        tertiaryAccent: Color(hex: "#4b3fd4"),
-        border: Color(hex: "#cbd5e1"),
-        error: Color(hex: "#dc2626")
-    )
+    // MARK: - Light Themes
     
     public static let minimalLight = Theme(
         id: "minimalLight",
@@ -164,20 +115,37 @@ extension Theme {
         isLight: true,
         backgroundMain: Color(hex: "#ffffff"),
         surface: Color(hex: "#ffffff"),
-        surfaceContainer: Color(hex: "#f5f7fb"),
-        surfaceContainerHigh: Color(hex: "#e8edf4"),
-        textPrimary: Color(hex: "#111827"),
-        textSecondary: Color(hex: "#334155"),
-        primaryAccent: Color(hex: "#111827"),
-        secondaryAccent: Color(hex: "#374151"),
-        tertiaryAccent: Color(hex: "#4b5563"),
-        border: Color(hex: "#cbd5e1"),
-        error: Color(hex: "#d92319")
+        surfaceContainer: Color(hex: "#f9f9f9"),
+        surfaceContainerHigh: Color(hex: "#f0f0f0"),
+        textPrimary: Color(hex: "#111111"),
+        textSecondary: Color(hex: "#3f3f46"),
+        primaryAccent: Color(hex: "#000000"),
+        secondaryAccent: Color(hex: "#333333"),
+        tertiaryAccent: Color(hex: "#52525b"),
+        border: Color(hex: "#b8b8b8"),
+        error: Color(hex: "#d93025")
+    )
+    
+    public static let burgundyLight = Theme(
+        id: "burgundyLight",
+        name: "Light: Burgundy Minimal",
+        isLight: true,
+        backgroundMain: Color(hex: "#faf9f9"),
+        surface: Color(hex: "#ffffff"),
+        surfaceContainer: Color(hex: "#f5f3f4"),
+        surfaceContainerHigh: Color(hex: "#eae6e7"),
+        textPrimary: Color(hex: "#2b1c1e"),
+        textSecondary: Color(hex: "#5c4f52"),
+        primaryAccent: Color(hex: "#800020"),      // Burgundy
+        secondaryAccent: Color(hex: "#b30030"),    // Lighter burgundy
+        tertiaryAccent: Color(hex: "#4d0013"),     // Darker burgundy
+        border: Color(hex: "#e0d9db"),
+        error: Color(hex: "#d93025")
     )
     
     public static let all: [Theme] = [
-        .vantage, .luminous, .nordicFrost, .obsidianSilver, .royalAmethyst, .mintTerminal,
-        .systemLight, .minimalLight
+        .luminous, .nordicFrost, .obsidianSilver, .mintTerminal,
+        .minimalLight, .burgundyLight
     ]
 }
 
