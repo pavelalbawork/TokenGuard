@@ -5,6 +5,8 @@
 .deriveddata/
 .relaykit/
 .swiftpm/
+AGENTS.md
+CLAUDE.md
 dist/
 DerivedData/
 xcuserdata/

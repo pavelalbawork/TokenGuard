@@ -39,7 +39,7 @@ If this utility makes your workflow easier, consider supporting its maintenance.
 
 - [ ] Ensure no hardcoded secrets or PII logging exist in the shipped source.
 - [ ] Verify `TokenGuard.app` has the correct version and build numbers set.
-- [ ] Verify the build is signed and notarized for macOS.
+- [ ] Verify the packaged app launches locally before publishing.
 - [ ] Zip the `TokenGuard.app` into `TokenGuard.zip`.
 - [ ] Attach `TokenGuard.zip` to the GitHub Release.
 - [ ] Publish Release.

@@ -6,7 +6,29 @@ Rather than asking for API keys or cloud syncing, TokenGuard reads local state f
 
 *Note: TokenGuard is an independent developer utility and is not affiliated with, endorsed by, or sponsored by OpenAI, Anthropic, or any other AI service provider.*
 
-![TokenGuard preview](docs/assets/readme-hero.svg)
+<table>
+  <tr>
+    <td width="58%" valign="top">
+      <img src="docs/assets/readme-screenshot.png" alt="TokenGuard screenshot showing the menu bar dashboard with provider overview and per-account usage cards" />
+    </td>
+    <td width="42%" valign="top">
+      <p><strong>Why it earns a spot in your menu bar</strong></p>
+      <ul>
+        <li>One glance to see remaining capacity across Codex, Claude, Gemini CLI, and Antigravity.</li>
+        <li>Real remaining-time windows and reset timing instead of hunting through separate tools.</li>
+        <li>Local-first account tracking with no analytics, hosted dashboard, or extra API setup.</li>
+        <li>Best for developers who actively switch between AI tools and want fast operational visibility.</li>
+      </ul>
+      <p><strong>What the app gives you</strong></p>
+      <ul>
+        <li>A compact global hero view for quick usage scans.</li>
+        <li>Per-account cards with remaining capacity, reset timing, and freshness state.</li>
+        <li>Multi-account support with active-account detection where local provider state makes that possible.</li>
+      </ul>
+
+    </td>
+  </tr>
+</table>
 
 ## What it does
 
@@ -41,8 +63,6 @@ TokenGuard is distributed directly through GitHub Releases.
 3. Unzip the file and drag `TokenGuard.app` to your `Applications` folder.
 4. Launch the app. It will appear in your macOS menu bar.
 
-For public releases, use the signed and notarized artifact attached to the release. If you build from source, you are responsible for local signing/notarization.
-
 ## Setup & Prerequisites
 
 Because TokenGuard relies on local provider state, **the corresponding provider CLI or app must already be installed and signed in on your Mac.**
@@ -53,6 +73,23 @@ Because TokenGuard relies on local provider state, **the corresponding provider 
 - To track Antigravity, make sure its local state is available on this Mac.
 
 *TokenGuard does not log you in to these services; it only reads the state they leave behind.*
+
+## How account setup works
+
+Adding an account is a validation step, not just a label form.
+
+1. Choose the provider you want to track.
+2. Enter the email or identifier shown by the currently signed-in local provider.
+3. TokenGuard checks the provider's local state before saving the account.
+4. If the local account does not match what you entered, the account is rejected instead of creating a dead placeholder entry.
+
+For consumer providers, TokenGuard only refreshes the currently active local account for that service. You can keep multiple saved accounts, but inactive ones are treated as saved references until you switch the local provider login.
+
+### Claude Code Keychain access
+
+Claude Code tracking depends on local Claude state and a Claude-owned Keychain item. macOS may ask you to grant TokenGuard access to that Keychain entry the first time Claude usage is read.
+
+If macOS does not remember that approval, the prompt can show up again after you quit and reopen TokenGuard. If you trust the app and want fewer repeated prompts, choose `Always Allow` in the macOS Keychain dialog.
 
 ## Privacy & Trust
 
@@ -99,7 +136,7 @@ If you encounter an issue or a parser breaks because a provider changed its loca
 
 ## Support ☕️
 
-TokenGuard is a free, open-source utility. If it improves your workflow, consider supporting its maintenance to help cover Apple Developer Program fees and the time spent keeping local parsers up to date.
+TokenGuard is a free, MIT-licensed utility. If it improves your workflow, consider supporting its maintenance to help cover Apple Developer Program fees and the time spent keeping local parsers up to date.
 
 - [Sponsor on GitHub](https://github.com/sponsors/pavelalbawork)
 - [Tip via Ko-fi](https://ko-fi.com/pavelalba)
