@@ -1,0 +1,107 @@
+<svg width="1200" height="720" viewBox="0 0 1200 720" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">TokenGuard macOS menu bar usage dashboard preview</title>
+  <desc id="desc">A stylized TokenGuard menu bar popover showing local AI subscription usage, remaining capacity gauges, provider cards, and privacy-first local tracking.</desc>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#294C7A"/>
+      <stop offset="48%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#07090F"/>
+    </radialGradient>
+    <linearGradient id="card" x1="180" y1="100" x2="980" y2="650">
+      <stop stop-color="#162033"/>
+      <stop offset="1" stop-color="#0B101B"/>
+    </linearGradient>
+    <linearGradient id="accentBlue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#83D7FF"/>
+      <stop offset="1" stop-color="#5B8CFF"/>
+    </linearGradient>
+    <linearGradient id="accentGold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFD57A"/>
+      <stop offset="1" stop-color="#FF8D5C"/>
+    </linearGradient>
+    <linearGradient id="accentGreen" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#8EFAC8"/>
+      <stop offset="1" stop-color="#4CCB8F"/>
+    </linearGradient>
+    <filter id="softShadow" x="130" y="50" width="940" height="650" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="36" stdDeviation="36" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="720" fill="url(#bgGlow)"/>
+  <circle cx="210" cy="120" r="180" fill="#5B8CFF" opacity="0.12"/>
+  <circle cx="980" cy="620" r="230" fill="#4CCB8F" opacity="0.10"/>
+  <path d="M0 584C158 514 278 620 430 574C582 528 684 398 855 451C994 494 1073 471 1200 390V720H0V584Z" fill="#FFFFFF" opacity="0.035"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="245" y="72" width="710" height="576" rx="34" fill="url(#card)" stroke="#2E3A51" stroke-width="1.5"/>
+    <rect x="245" y="72" width="710" height="64" rx="34" fill="#111A2B"/>
+    <rect x="245" y="112" width="710" height="24" fill="#111A2B"/>
+    <circle cx="292" cy="104" r="9" fill="#FF6B6B"/>
+    <circle cx="320" cy="104" r="9" fill="#FFD166"/>
+    <circle cx="348" cy="104" r="9" fill="#4CCB8F"/>
+    <text x="384" y="111" fill="#E9F0FF" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="22" font-weight="700">TokenGuard</text>
+    <text x="790" y="111" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="15" font-weight="600">Local-first</text>
+
+    <rect x="282" y="166" width="636" height="150" rx="24" fill="#0E1625" stroke="#26334A"/>
+    <text x="316" y="203" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">REMAINING CAPACITY</text>
+
+    <g transform="translate(333 238)">
+      <circle cx="0" cy="0" r="42" stroke="#243149" stroke-width="8"/>
+      <circle cx="0" cy="0" r="42" stroke="url(#accentBlue)" stroke-width="8" stroke-linecap="round" stroke-dasharray="198 264" transform="rotate(-90)"/>
+      <circle cx="0" cy="0" r="28" stroke="#243149" stroke-width="6"/>
+      <circle cx="0" cy="0" r="28" stroke="#83D7FF" stroke-width="6" stroke-linecap="round" stroke-dasharray="132 176" transform="rotate(-90)"/>
+      <text x="0" y="7" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="18" font-weight="800">C</text>
+      <text x="0" y="70" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="800">CODEX</text>
+    </g>
+    <g transform="translate(487 238)">
+      <circle cx="0" cy="0" r="42" stroke="#243149" stroke-width="8"/>
+      <circle cx="0" cy="0" r="42" stroke="url(#accentGold)" stroke-width="8" stroke-linecap="round" stroke-dasharray="154 264" transform="rotate(-90)"/>
+      <circle cx="0" cy="0" r="28" stroke="#243149" stroke-width="6"/>
+      <circle cx="0" cy="0" r="28" stroke="#FFD57A" stroke-width="6" stroke-linecap="round" stroke-dasharray="92 176" transform="rotate(-90)"/>
+      <text x="0" y="7" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="18" font-weight="800">✳</text>
+      <text x="0" y="70" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="800">CLAUDE</text>
+    </g>
+    <g transform="translate(641 238)">
+      <circle cx="0" cy="0" r="42" stroke="#243149" stroke-width="8"/>
+      <circle cx="0" cy="0" r="42" stroke="url(#accentGreen)" stroke-width="8" stroke-linecap="round" stroke-dasharray="225 264" transform="rotate(-90)"/>
+      <circle cx="0" cy="0" r="28" stroke="#243149" stroke-width="6"/>
+      <circle cx="0" cy="0" r="28" stroke="#8EFAC8" stroke-width="6" stroke-linecap="round" stroke-dasharray="141 176" transform="rotate(-90)"/>
+      <text x="0" y="7" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="18" font-weight="800">G</text>
+      <text x="0" y="70" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="800">GEMINI</text>
+    </g>
+    <g transform="translate(795 238)">
+      <circle cx="0" cy="0" r="42" stroke="#243149" stroke-width="8"/>
+      <circle cx="0" cy="0" r="42" stroke="#B99CFF" stroke-width="8" stroke-linecap="round" stroke-dasharray="178 264" transform="rotate(-90)"/>
+      <circle cx="0" cy="0" r="28" stroke="#243149" stroke-width="6"/>
+      <circle cx="0" cy="0" r="28" stroke="#D7C5FF" stroke-width="6" stroke-linecap="round" stroke-dasharray="118 176" transform="rotate(-90)"/>
+      <text x="0" y="7" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Display, Inter, Arial, sans-serif" font-size="18" font-weight="800">A</text>
+      <text x="0" y="70" text-anchor="middle" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="800">AG</text>
+    </g>
+
+    <rect x="282" y="346" width="636" height="76" rx="18" fill="#121D30" stroke="#26334A"/>
+    <text x="314" y="377" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="17" font-weight="800">Claude Pro</text>
+    <text x="314" y="402" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="600">5-hour window</text>
+    <rect x="536" y="378" width="216" height="10" rx="5" fill="#26334A"/>
+    <rect x="536" y="378" width="142" height="10" rx="5" fill="url(#accentGold)"/>
+    <text x="782" y="392" fill="#FFD57A" font-family="SF Mono, Menlo, monospace" font-size="18" font-weight="800">66%</text>
+    <text x="837" y="392" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="700">1h 24m</text>
+
+    <rect x="282" y="438" width="636" height="76" rx="18" fill="#121D30" stroke="#26334A"/>
+    <text x="314" y="469" fill="#E9F0FF" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="17" font-weight="800">Codex Plus</text>
+    <text x="314" y="494" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="600">Weekly cap</text>
+    <rect x="536" y="470" width="216" height="10" rx="5" fill="#26334A"/>
+    <rect x="536" y="470" width="184" height="10" rx="5" fill="url(#accentBlue)"/>
+    <text x="782" y="484" fill="#83D7FF" font-family="SF Mono, Menlo, monospace" font-size="18" font-weight="800">85%</text>
+    <text x="837" y="484" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="13" font-weight="700">Mon</text>
+
+    <rect x="282" y="540" width="180" height="42" rx="21" fill="#17263D" stroke="#314563"/>
+    <text x="372" y="566" text-anchor="middle" fill="#B9C7DD" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14" font-weight="800">No cloud sync</text>
+    <rect x="486" y="540" width="206" height="42" rx="21" fill="#17263D" stroke="#314563"/>
+    <text x="589" y="566" text-anchor="middle" fill="#B9C7DD" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14" font-weight="800">Reads local CLI state</text>
+    <rect x="716" y="540" width="202" height="42" rx="21" fill="#17263D" stroke="#314563"/>
+    <text x="817" y="566" text-anchor="middle" fill="#B9C7DD" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="14" font-weight="800">Menu bar native</text>
+  </g>
+
+  <text x="600" y="682" text-anchor="middle" fill="#8FA2C0" font-family="SF Pro Text, Inter, Arial, sans-serif" font-size="18" font-weight="600">Track AI subscription usage from local provider state. No API keys. No cloud account.</text>
+</svg>

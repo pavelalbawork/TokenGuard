@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## What This Is
 
-macOS menu bar app (Swift 6.0, macOS 14+) that shows AI service usage limits and reset timers at a glance. Supports multiple accounts across Codex, Codex, Gemini, and Antigravity. Zero third-party dependencies — Apple frameworks only.
+macOS menu bar app (Swift 6.0, macOS 14+) that shows local AI service usage limits and reset timers at a glance. Supports multiple accounts across Claude Code, Codex, Gemini CLI, and Antigravity. Zero third-party dependencies — Apple frameworks only.
 
 ## Build & Test
 
@@ -71,16 +71,19 @@ Follow this pattern when adding new providers or testable components: define a p
 6. Add the UI flow in `Views/AddAccountView.swift` (provider picker, credential fields, validation)
 7. Add tests using the protocol-injection pattern from `TestSupport.swift`
 
-## Design Decisions (Locked)
+## Product Boundaries
 
-Settled in `research/design-decisions.md` — don't revisit without strong reason:
+Current V1 boundaries:
+
 - Keychain-only credentials, never disk
 - No progress bar when limit is unknown
-- Menu bar popover only, no standalone window
+- Menu bar popover as the primary surface
 - Multi-window model per account
-- Gemini uses Vertex AI (Cloud Monitoring API), not AI Studio
+- Local consumer/provider state first, not a cloud account manager
+- Provider parsing is best-effort and may break when upstream local formats change
 
 ## Reference
 
-- `IMPLEMENTATION_BRIEF.md` — provider API details, endpoint URLs, response formats
-- `research/` — design specs, API research, architecture critique
+- `README.md` — public product positioning and setup guidance
+- `docs/direct-distribution-release.md` — direct GitHub release checklist
+- `RELEASE_TEMPLATE.md` — copy/paste release notes template

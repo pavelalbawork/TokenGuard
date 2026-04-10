@@ -1,9 +1,13 @@
 .DS_Store
+*.DS_Store
 .build/
+.claude/
 .deriveddata/
 .relaykit/
 .swiftpm/
 dist/
 DerivedData/
 xcuserdata/
+*.xcuserdatad/
 *.xcuserstate
+test_*.swift

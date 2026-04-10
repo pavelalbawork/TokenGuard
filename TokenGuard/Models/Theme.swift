@@ -126,26 +126,26 @@ extension Theme {
         error: Color(hex: "#d93025")
     )
     
-    public static let steelCrimson = Theme(
-        id: "steelCrimson",
-        name: "Light: Steel & Crimson",
+    public static let silverLavender = Theme(
+        id: "silverLavender",
+        name: "Light: Silver & Lavender",
         isLight: true,
-        backgroundMain: Color(hex: "#c6cbd1"),     // Deep aluminum gray
-        surface: Color(hex: "#dce0e5"),            // Lighter brushed steel surface
-        surfaceContainer: Color(hex: "#b0b6be"),   // Inset cool gray
-        surfaceContainerHigh: Color(hex: "#9aa3ac"), // Deep inset cool gray
-        textPrimary: Color(hex: "#16191d"),        // Near black, cool tinted
-        textSecondary: Color(hex: "#434b54"),      // Slate gray text
-        primaryAccent: Color(hex: "#c81e36"),      // Vibrant sportscar crimson
-        secondaryAccent: Color(hex: "#e02b46"),    // Brighter ruby red
-        tertiaryAccent: Color(hex: "#9b1629"),     // Deep blood red
-        border: Color(hex: "#a1a8b0"),
-        error: Color(hex: "#d93025")
+        backgroundMain: Color(hex: "#d3d5d8"),     // Soft silver gray
+        surface: Color(hex: "#e4e6e9"),            // Elevated lighter silver
+        surfaceContainer: Color(hex: "#c7cbd0"),   // Inset gray
+        surfaceContainerHigh: Color(hex: "#b4b8be"), // Deep inset gray
+        textPrimary: Color(hex: "#2d2f36"),        // Soft deep slate (not harsh black)
+        textSecondary: Color(hex: "#565963"),      // Muted slate gray
+        primaryAccent: Color(hex: "#8b7ed6"),      // Soft vibrant lavender
+        secondaryAccent: Color(hex: "#a59be0"),    // Lighter lavender
+        tertiaryAccent: Color(hex: "#6b5cbf"),     // Deeper royal lavender
+        border: Color(hex: "#b6b8bd"),
+        error: Color(hex: "#d16b77")               // Soft muted coral
     )
     
     public static let all: [Theme] = [
         .luminous, .nordicFrost, .obsidianSilver, .mintTerminal,
-        .minimalLight, .steelCrimson
+        .minimalLight, .silverLavender
     ]
 }
 
