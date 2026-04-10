@@ -15,7 +15,7 @@ struct MainPopoverView: View {
     @State private var isAddingAccount = false
     @Namespace private var animationNameSpace
 
-    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
 
     var body: some View {
         @Bindable var bindableThemeManager = themeManager
@@ -118,7 +118,7 @@ struct MainPopoverView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 16) {
-                        if !accountStore.accounts.isEmpty {
+                        if !heroServiceTypes.isEmpty {
                             GlobalUsageHeroView()
                         }
                         
@@ -222,6 +222,14 @@ struct MainPopoverView: View {
         return "v\(v) (\(b))"
     }
 
+    private var heroServiceTypes: [ServiceType] {
+        accountStore.accounts.reduce(into: Set<ServiceType>()) { partialResult, account in
+            partialResult.insert(account.serviceType)
+        }
+        .intersection([.codex, .claude, .gemini, .antigravity])
+        .sorted { $0.rawValue < $1.rawValue }
+    }
+
     @ViewBuilder
     private func headerTabButton(title: String, isSelected: Bool, theme: Theme, action: @escaping () -> Void) -> some View {
         Button(action: {
@@ -309,20 +317,23 @@ struct GlobalUsageHeroView: View {
         var isMiddleGrayedOut: Bool = false
     }
 
-    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,antigravity,custom"
+    @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
 
     var body: some View {
         let theme = themeManager.currentTheme
-        let (codex, claude, ag) = calculateMetrics()
+        let (codex, claude, gemini, ag) = calculateMetrics()
 
         let orderKeys = providerOrderStr.components(separatedBy: ",")
-        let sortedServices = [ServiceType.codex, ServiceType.claude, ServiceType.antigravity].sorted { a, b in
+        let presentServices = Set(accountStore.accounts.map(\.serviceType))
+        let sortedServices = [ServiceType.codex, ServiceType.claude, ServiceType.gemini, ServiceType.antigravity]
+            .filter { presentServices.contains($0) }
+            .sorted { a, b in
             let idxA = orderKeys.firstIndex(of: a.rawValue) ?? 999
             let idxB = orderKeys.firstIndex(of: b.rawValue) ?? 999
             return idxA < idxB
         }
 
-        HStack(alignment: .top, spacing: 20) {
+        HStack(alignment: .top, spacing: 16) {
             ForEach(sortedServices, id: \.self) { service in
                 if service == .codex {
                     UnifiedConcentricGauge(
@@ -350,6 +361,19 @@ struct GlobalUsageHeroView: View {
                         accentColor: theme.primaryAccent.opacity(0.8)
                     )
                     .frame(maxWidth: .infinity)
+                } else if service == .gemini {
+                    UnifiedConcentricGauge(
+                        title: "GEMINI",
+                        icon: ServiceType.gemini.iconName,
+                        outerLabel: "DAY",
+                        middleLabel: nil,
+                        innerLabel: nil,
+                        metrics: gemini,
+                        theme: theme,
+                        baseColor: theme.secondaryAccent.opacity(0.4),
+                        accentColor: ServiceType.gemini.tintColor(for: theme)
+                    )
+                    .frame(maxWidth: .infinity)
                 } else if service == .antigravity {
                     UnifiedConcentricGauge(
                         title: "AG",
@@ -375,9 +399,10 @@ struct GlobalUsageHeroView: View {
         )
     }
 
-    private func calculateMetrics() -> (codex: ProviderMetrics, claude: ProviderMetrics, ag: ProviderMetrics) {
+    private func calculateMetrics() -> (codex: ProviderMetrics, claude: ProviderMetrics, gemini: ProviderMetrics, ag: ProviderMetrics) {
         var c_shortTot = 0.0, c_shortCnt = 0, c_longTot = 0.0, c_longCnt = 0
         var cl_shortTot = 0.0, cl_shortCnt = 0, cl_longTot = 0.0, cl_longCnt = 0
+        var geminiDailyTot = 0.0, geminiDailyCnt = 0
         var ag_claudeTot = 0.0, ag_claudeCnt = 0
         var ag_geminiProTot = 0.0, ag_geminiProCnt = 0
         var ag_geminiFlashTot = 0.0, ag_geminiFlashCnt = 0
@@ -420,6 +445,12 @@ struct GlobalUsageHeroView: View {
                         cl_longTot += weeklyProgress; cl_longCnt += 1
                     }
                 }
+            } else if account.serviceType == .gemini {
+                for window in snapshot.windows {
+                    guard let progress = window.percentUsed else { continue }
+                    geminiDailyTot += progress
+                    geminiDailyCnt += 1
+                }
             } else if account.serviceType == .antigravity {
                 for window in snapshot.windows {
                     guard let progress = window.percentUsed else { continue }
@@ -446,13 +477,17 @@ struct GlobalUsageHeroView: View {
         )
         if let outer = claude.outerTerm, outer >= 1.0 { claude.isMiddleGrayedOut = true }
 
+        let gemini = ProviderMetrics(
+            outerTerm: geminiDailyCnt > 0 ? (geminiDailyTot / Double(geminiDailyCnt)) : nil
+        )
+
         let ag = ProviderMetrics(
             outerTerm: ag_claudeCnt > 0 ? (ag_claudeTot / Double(ag_claudeCnt)) : nil,
             middleTerm: ag_geminiProCnt > 0 ? (ag_geminiProTot / Double(ag_geminiProCnt)) : nil,
             innerTerm: ag_geminiFlashCnt > 0 ? (ag_geminiFlashTot / Double(ag_geminiFlashCnt)) : nil
         )
 
-        return (codex, claude, ag)
+        return (codex, claude, gemini, ag)
     }
 }
 
