@@ -32,11 +32,15 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
+        if let authIdentity = try identityReader.readIdentity() {
+            return authIdentity
+        }
+
         if let liveIdentity = await codexLiveStateProvider?.currentState().identity {
             return liveIdentity
         }
 
-        return try identityReader.readIdentity()
+        return nil
     }
 
     func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {

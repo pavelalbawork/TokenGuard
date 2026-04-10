@@ -88,7 +88,7 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertEqual(snapshot.tier, "Team")
     }
 
-    func testConsumerIdentityPrefersLiveAppServerIdentity() async throws {
+    func testConsumerIdentityFallsBackToLiveAppServerIdentityWhenAuthFileMissing() async throws {
         let provider = OpenAIProvider(
             codexLiveStateProvider: MockCodexLiveStateProvider(
                 state: CodexLiveState(
@@ -114,6 +114,44 @@ final class OpenAIProviderTests: XCTestCase {
         let identity = try await provider.currentConsumerIdentity()
 
         XCTAssertEqual(identity?.email, "live@example.com")
+    }
+
+    func testConsumerIdentityPrefersCurrentAuthFileOverStaleLiveAppServerIdentity() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let authURL = tempDirectory.appendingPathComponent("auth.json")
+        try """
+        {
+          "tokens": {
+            "account_id": "acct-local",
+            "id_token": "\(Self.jwt(email: "local@example.com"))"
+          }
+        }
+        """.write(to: authURL, atomically: true, encoding: .utf8)
+
+        let provider = OpenAIProvider(
+            codexLiveStateProvider: MockCodexLiveStateProvider(
+                state: CodexLiveState(
+                    snapshot: nil,
+                    identity: ConsumerAccountIdentity(email: "stale-live@example.com", externalID: nil),
+                    status: .live,
+                    lastUpdateAt: nil,
+                    lastErrorText: nil
+                )
+            ),
+            snapshotReader: MockConsumerSnapshotReader(windowsToReturn: nil),
+            cliParser: nil,
+            identityReader: CodexAuthIdentityReader(authURL: authURL),
+            now: { Date(timeIntervalSince1970: 1_775_000_000) }
+        )
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "local@example.com")
+        XCTAssertEqual(identity?.externalID, "acct-local")
     }
 
     func testCodexClientParsesBootstrapAndLaterRateLimitUpdate() async throws {

@@ -283,13 +283,18 @@ final class UsagePollingEngine {
             let identity: ConsumerAccountIdentity?
             if serviceType == .codex {
                 let liveIdentity = await codexClient.currentState().identity
-                if let liveIdentity {
-                    identity = liveIdentity
-                } else if let detector = providers[serviceType] as? any ConsumerAccountDetecting {
-                    identity = try? await detector.currentConsumerIdentity()
+                let localIdentity: ConsumerAccountIdentity?
+                if let detector = providers[serviceType] as? any ConsumerAccountDetecting {
+                    localIdentity = try? await detector.currentConsumerIdentity()
                 } else {
-                    identity = nil
+                    localIdentity = nil
                 }
+
+                if identitiesConflict(localIdentity, liveIdentity) {
+                    await codexClient.restart()
+                }
+
+                identity = localIdentity ?? liveIdentity
             } else {
                 guard let detector = providers[serviceType] as? any ConsumerAccountDetecting else {
                     continue
@@ -344,6 +349,32 @@ final class UsagePollingEngine {
             }
             .first?
             .account
+    }
+
+    private func identitiesConflict(_ localIdentity: ConsumerAccountIdentity?, _ liveIdentity: ConsumerAccountIdentity?) -> Bool {
+        guard let localIdentity, let liveIdentity else {
+            return false
+        }
+
+        if let localEmail = normalizedIdentity(localIdentity.email),
+           let liveEmail = normalizedIdentity(liveIdentity.email),
+           localEmail != liveEmail {
+            return true
+        }
+
+        if let localExternalID = normalizedIdentity(localIdentity.externalID),
+           let liveExternalID = normalizedIdentity(liveIdentity.externalID),
+           localExternalID != liveExternalID {
+            return true
+        }
+
+        return false
+    }
+
+    private func normalizedIdentity(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
     }
 
     private func shouldPoll(_ account: Account) -> Bool {

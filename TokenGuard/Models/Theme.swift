@@ -147,7 +147,7 @@ extension Theme {
     )
     
     public static let all: [Theme] = [
-        .luminous, .nordicFrost, .obsidianSilver, .mintTerminal,
+        .nordicFrost, .luminous, .obsidianSilver, .mintTerminal,
         .minimalLight, .pastelDash
     ]
 }

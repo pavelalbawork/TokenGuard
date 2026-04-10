@@ -452,6 +452,13 @@ actor CodexAppServerClient: CodexLiveStateProviding {
         }
     }
 
+    func restart() {
+        currentSession?.stop()
+        currentSession = nil
+        reconnectRequested = true
+        start()
+    }
+
     private func runLoop() async {
         var attempt = 0
 
