@@ -16,7 +16,7 @@ struct AccountEditScreen: View {
                     .tracking(1.0)
                     .foregroundStyle(theme.textPrimary)
 
-                Text("Manage your linked API accounts.")
+                Text("Manage linked accounts and optional display names.")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(theme.textSecondary)
             }
@@ -44,7 +44,7 @@ struct AccountEditRow: View {
     @Environment(UsagePollingEngine.self) private var pollingEngine
 
     @State private var alias: String = ""
-    @State private var isDeleting = false
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -62,33 +62,11 @@ struct AccountEditRow: View {
                 }
                 Spacer()
 
-                if isDeleting {
-                    Button(action: {
-                        try? pollingEngine.deleteAccount(account)
-                    }) {
-                        Text("Delete")
-                            .font(.system(size: 10, weight: .bold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(theme.error.opacity(0.8))
-                            .foregroundStyle(theme.backgroundMain)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: { isDeleting = false }) {
-                        Text("Cancel")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(theme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Button(action: { isDeleting = true }) {
-                        Image(systemName: "trash")
-                            .foregroundStyle(theme.error.opacity(0.8))
-                    }
-                    .buttonStyle(.plain)
+                Button(action: { showDeleteConfirmation = true }) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(theme.error.opacity(0.8))
                 }
+                .buttonStyle(.plain)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -115,6 +93,14 @@ struct AccountEditRow: View {
         .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
+        .alert("Delete account?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                try? pollingEngine.deleteAccount(account)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the account and its local state.")
+        }
         .onAppear {
             alias = account.alias ?? ""
         }

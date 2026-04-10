@@ -16,7 +16,7 @@ struct AccountCardView: View {
             CardHoverContainer(theme: theme) {
                 VStack(alignment: .leading, spacing: 14) {
                 if let snapshot = state?.snapshot {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 13) {
                         ForEach(sortedWindows(for: snapshot.windows)) { window in
                             UsageWindowRow(window: window)
                         }
@@ -77,7 +77,8 @@ struct AccountCardView: View {
                     }
                 }
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

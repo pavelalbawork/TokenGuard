@@ -59,7 +59,9 @@ protocol CodexAppServerSessionFactory: Sendable {
 
 struct SystemCodexAppServerSessionFactory: CodexAppServerSessionFactory {
     func makeSession() throws -> CodexAppServerSession {
-        SystemCodexAppServerSession()
+        let session = SystemCodexAppServerSession()
+        try session.start()
+        return session
     }
 }
 
@@ -276,7 +278,18 @@ final class SystemCodexAppServerSession: NSObject, CodexAppServerSession, @unche
             self.continuation.finish()
         }
 
-        try! process.run()
+    }
+
+    func start() throws {
+        do {
+            try process.run()
+        } catch {
+            stdoutPipe.fileHandleForReading.readabilityHandler = nil
+            stderrPipe.fileHandleForReading.readabilityHandler = nil
+            continuation.yield(.terminated(process.terminationStatus))
+            continuation.finish()
+            throw error
+        }
     }
 
     func send(jsonLine: String) throws {

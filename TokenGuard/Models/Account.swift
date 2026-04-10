@@ -3,12 +3,14 @@ import Foundation
 enum ServiceType: String, Codable, CaseIterable, Sendable {
     case claude
     case codex
+    case gemini
     case antigravity
 
     var iconName: String {
         switch self {
         case .claude: return "asterisk"
         case .codex: return "terminal"
+        case .gemini: return "sparkles"
         case .antigravity: return "point.3.filled.connected.trianglepath.dotted"
         }
     }
@@ -21,6 +23,7 @@ extension ServiceType {
         switch self {
         case .claude: return theme.secondaryAccent
         case .codex: return theme.primaryAccent
+        case .gemini: return theme.primaryAccent.opacity(0.8)
         case .antigravity: return theme.textPrimary
         }
     }

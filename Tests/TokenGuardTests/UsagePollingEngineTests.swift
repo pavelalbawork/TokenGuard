@@ -4,6 +4,67 @@ import XCTest
 
 @MainActor
 final class UsagePollingEngineTests: XCTestCase {
+    func testRefreshAllSwitchesActiveGeminiConsumerToCurrentIdentity() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let firstAccount = Account(
+            name: "old@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+        let secondAccount = Account(
+            name: "new@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-2",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "new@example.com"
+            ]
+        )
+
+        try accountStore.add(firstAccount)
+        try accountStore.add(secondAccount)
+
+        let snapshot = UsageSnapshot(
+            accountId: secondAccount.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 4, limit: 10, unit: .requests, resetDate: nil, label: "Gemini 2.5 Pro")
+            ],
+            tier: "Gemini Code Assist in Google One AI Pro"
+        )
+        let provider = MockConsumerIdentityProvider(
+            serviceType: .gemini,
+            identity: ConsumerAccountIdentity(email: "new@example.com", externalID: nil),
+            snapshot: snapshot
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.gemini: provider],
+            serviceRefreshIntervals: [.gemini: 300],
+            sleep: { _ in }
+        )
+
+        await engine.refreshAll(force: true)
+
+        XCTAssertEqual(accountStore.activeConsumerAccountID(for: .gemini), secondAccount.id)
+        XCTAssertEqual(engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used, 4)
+        XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
+    }
+
     func testRefreshAllSwitchesActiveCodexConsumerToLiveIdentity() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -191,7 +252,7 @@ final class UsagePollingEngineTests: XCTestCase {
 }
 
 private struct MockConsumerIdentityProvider: ServiceProvider, ConsumerAccountDetecting {
-    let serviceType: ServiceType = .codex
+    let serviceType: ServiceType
     let identity: ConsumerAccountIdentity?
     let snapshot: UsageSnapshot
 

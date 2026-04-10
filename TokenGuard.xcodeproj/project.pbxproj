@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0BA2590561AE2EBB6604E808 /* GeminiCLIProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCB07CFA1E6B34BCF08486A6 /* GeminiCLIProviderTests.swift */; };
 		0E2785B4411CCDB02388EB77 /* UsageProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E307FD57182195FC0CED9CD /* UsageProgressBar.swift */; };
 		1928CC93A79183BAE9A3BAA6 /* UsagePollingEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C661A42D8AE018A962318F36 /* UsagePollingEngineTests.swift */; };
 		28FE7B70294F696C6BD9F92C /* TokenGuardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17568B9BC3C0732C4FF7B653 /* TokenGuardApp.swift */; };
@@ -25,6 +26,7 @@
 		8175AF8880BB23D9CC143889 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 802CF57F6BB17051EF239947 /* Assets.xcassets */; };
 		918C627F9EAF1A125BD1E0F3 /* OpenAIProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E84EE4B8DBD16313B990E151 /* OpenAIProviderTests.swift */; };
 		92A2479D810D24506739949E /* GoogleOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25767AF609D51A056B221BE /* GoogleOAuthManager.swift */; };
+		9428455BFFBEBCB73FCE2786 /* GeminiCLIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EA8ABCBD8D57ED26C3D30DB /* GeminiCLIProvider.swift */; };
 		9AEC6DD023169C939FD2ED78 /* KeychainManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1882D7579AD3EA71D6302738 /* KeychainManager.swift */; };
 		9B7CB01EB95122DA8FC1571D /* AccountStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41ECDAAFB865872C523862AD /* AccountStoreTests.swift */; };
 		9FBC1A88958A678A2C1B012E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FBFAA87A102478FFF2EDCB7 /* Theme.swift */; };
@@ -62,6 +64,7 @@
 		010291CE9D08A43432C35F7B /* MainPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPopoverView.swift; sourceTree = "<group>"; };
 		02C3987547FDD6B91FF8CD82 /* AnthropicProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProvider.swift; sourceTree = "<group>"; };
 		043DF1B5DB5A92229534CBD0 /* ServiceSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceSectionView.swift; sourceTree = "<group>"; };
+		0EA8ABCBD8D57ED26C3D30DB /* GeminiCLIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiCLIProvider.swift; sourceTree = "<group>"; };
 		115B5DD30F2E9BD883C27EC9 /* TokenGuardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TokenGuardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		17568B9BC3C0732C4FF7B653 /* TokenGuardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenGuardApp.swift; sourceTree = "<group>"; };
 		1882D7579AD3EA71D6302738 /* KeychainManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManager.swift; sourceTree = "<group>"; };
@@ -93,6 +96,7 @@
 		B6830D3453F9C92E57E3A1A5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C661A42D8AE018A962318F36 /* UsagePollingEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsagePollingEngineTests.swift; sourceTree = "<group>"; };
 		C93BAA8AA8A88821FDDC827C /* KeychainManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainManagerTests.swift; sourceTree = "<group>"; };
+		CCB07CFA1E6B34BCF08486A6 /* GeminiCLIProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiCLIProviderTests.swift; sourceTree = "<group>"; };
 		CCC42431DE36319AA8D673D0 /* AnthropicProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicProviderTests.swift; sourceTree = "<group>"; };
 		D00B2F70D6956278A524F21C /* CodexCLIParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexCLIParser.swift; sourceTree = "<group>"; };
 		E3B0881C25FE9A6D226160E4 /* OpenAIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIProvider.swift; sourceTree = "<group>"; };
@@ -208,6 +212,7 @@
 				CCC42431DE36319AA8D673D0 /* AnthropicProviderTests.swift */,
 				935668FABB5E2C5ACA6CB692 /* AntigravityProviderTests.swift */,
 				F144F9BE0B087DAC708BEC4C /* CodexSessionSnapshotReaderTests.swift */,
+				CCB07CFA1E6B34BCF08486A6 /* GeminiCLIProviderTests.swift */,
 				C93BAA8AA8A88821FDDC827C /* KeychainManagerTests.swift */,
 				E84EE4B8DBD16313B990E151 /* OpenAIProviderTests.swift */,
 				42CDEE359202927522B1A23F /* TestSupport.swift */,
@@ -223,6 +228,7 @@
 				02C3987547FDD6B91FF8CD82 /* AnthropicProvider.swift */,
 				5A21B8AC123453071295378D /* AntigravityProvider.swift */,
 				7303D826944B4105AF2654C4 /* ClaudeSessionSnapshotReader.swift */,
+				0EA8ABCBD8D57ED26C3D30DB /* GeminiCLIProvider.swift */,
 				E3B0881C25FE9A6D226160E4 /* OpenAIProvider.swift */,
 				19B944AF21B5F9835122DD4D /* ServiceProvider.swift */,
 				5C69F5F989F697DBE55B1E31 /* UsagePollingEngine.swift */,
@@ -324,6 +330,7 @@
 				D8D2BB090EB31F37F8AD12D4 /* AnthropicProviderTests.swift in Sources */,
 				FBD5CA05F74CF1A9E0C141A8 /* AntigravityProviderTests.swift in Sources */,
 				B7039FAC053B9EA1095ED271 /* CodexSessionSnapshotReaderTests.swift in Sources */,
+				0BA2590561AE2EBB6604E808 /* GeminiCLIProviderTests.swift in Sources */,
 				52931F8675F178F661A5C552 /* KeychainManagerTests.swift in Sources */,
 				918C627F9EAF1A125BD1E0F3 /* OpenAIProviderTests.swift in Sources */,
 				41D4C533E8F79C0478493C77 /* TestSupport.swift in Sources */,
@@ -347,6 +354,7 @@
 				D42764F4CD0E93297381C69C /* ClaudeSessionSnapshotReader.swift in Sources */,
 				5E285FD8B5DC15CE3C1D4E04 /* CodexCLIParser.swift in Sources */,
 				2EEEAFDCA2F40C2A94646F36 /* CountdownTimerText.swift in Sources */,
+				9428455BFFBEBCB73FCE2786 /* GeminiCLIProvider.swift in Sources */,
 				92A2479D810D24506739949E /* GoogleOAuthManager.swift in Sources */,
 				9AEC6DD023169C939FD2ED78 /* KeychainManager.swift in Sources */,
 				4F3BFD91BB73123291D9CBDE /* MainPopoverView.swift in Sources */,

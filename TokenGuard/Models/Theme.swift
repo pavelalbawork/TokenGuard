@@ -152,9 +152,9 @@ extension Theme {
         textPrimary: Color(hex: "#000000"),
         textSecondary: Color(hex: "#3c3c43"),
         primaryAccent: Color(hex: "#007aff"), // Apple Blue
-        secondaryAccent: Color(hex: "#5ac8fa"), // Apple Light Blue
-        tertiaryAccent: Color(hex: "#5856d6"), // Apple Indigo
-        border: Color(hex: "#c6c6c8"),
+        secondaryAccent: Color(hex: "#005f99"),
+        tertiaryAccent: Color(hex: "#4b3fd4"),
+        border: Color(hex: "#8e8e93"),
         error: Color(hex: "#ff3b30")
     )
     
@@ -167,11 +167,11 @@ extension Theme {
         surfaceContainer: Color(hex: "#f9f9f9"),
         surfaceContainerHigh: Color(hex: "#f0f0f0"),
         textPrimary: Color(hex: "#111111"),
-        textSecondary: Color(hex: "#666666"),
+        textSecondary: Color(hex: "#3f3f46"),
         primaryAccent: Color(hex: "#000000"),
         secondaryAccent: Color(hex: "#333333"),
-        tertiaryAccent: Color(hex: "#888888"),
-        border: Color(hex: "#eaeaea"),
+        tertiaryAccent: Color(hex: "#52525b"),
+        border: Color(hex: "#b8b8b8"),
         error: Color(hex: "#d93025")
     )
     

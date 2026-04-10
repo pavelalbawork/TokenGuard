@@ -12,7 +12,7 @@ struct ServiceSectionView: View {
         let activeConsumerAccountId = accountStore.activeConsumerAccountID(for: serviceType)
         let theme = themeManager.currentTheme
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             // ── Section Header ──────────────────────────────────────────
             HStack(spacing: 8) {
                 Image(systemName: serviceType.iconName)
@@ -52,7 +52,7 @@ struct ServiceSectionView: View {
 
             // ── Account Cards ───────────────────────────────────────────
             ForEach(accounts) { account in
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
                     // Show per-account header when multiple accounts exist
                     if accounts.count > 1 {
                         HStack(spacing: 4) {

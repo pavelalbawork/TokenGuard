@@ -42,7 +42,7 @@ struct UsageWindowRow: View {
     private var valueText: String {
         if window.unit == .percent {
             let remaining = max(0, 100 - window.used)
-            return "\(Int(remaining.rounded()))%"
+            return "\(Int(remaining.rounded()))% left"
         }
 
         if let limit = window.limit {
@@ -51,7 +51,7 @@ struct UsageWindowRow: View {
                 return "\(window.unit.symbol)\(remaining.formatted(.number.precision(.fractionLength(2)))) left"
             }
             let fmt = IntegerFormatStyle<Int>()
-            return "\(fmt.format(Int(remaining)))/\(fmt.format(Int(limit)))\(window.unit.suffix)"
+            return "\(fmt.format(Int(remaining)))/\(fmt.format(Int(limit)))\(window.unit.suffix) left"
         }
 
         // No limit — just show used as fallback

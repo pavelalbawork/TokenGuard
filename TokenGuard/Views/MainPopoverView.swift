@@ -403,9 +403,7 @@ struct GlobalUsageHeroView: View {
             return idxA < idxB
         }
 
-        let columns = [GridItem(.flexible()), GridItem(.flexible())]
-
-        LazyVGrid(columns: columns, alignment: .center, spacing: 12) {
+        HStack(alignment: .top, spacing: 10) {
             ForEach(sortedServices, id: \.self) { service in
                 if service == .codex {
                     UnifiedConcentricGauge(
@@ -600,24 +598,24 @@ struct UnifiedConcentricGauge: View {
         let pulseDuration = max(0.5, 3.0 * (1.0 - min(middleVal, 1.0)))
         let midRingColor = metrics.isMiddleGrayedOut ? theme.surfaceContainerHigh.opacity(0.8) : baseColor
         
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             ZStack {
                 // Background Tracks
                 Circle()
-                    .stroke(theme.surfaceContainerHigh.opacity(0.3), lineWidth: 6)
-                    .frame(width: 84, height: 84)
+                    .stroke(theme.surfaceContainerHigh.opacity(0.3), lineWidth: 4.5)
+                    .frame(width: 70, height: 70)
                 Circle()
-                    .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 4)
-                    .frame(width: 68, height: 68)
+                    .stroke(theme.surfaceContainerHigh.opacity(0.4), lineWidth: 3.5)
+                    .frame(width: 56, height: 56)
                 if metrics.innerTerm != nil {
                     Circle()
-                        .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 3)
-                        .frame(width: 54, height: 54)
+                        .stroke(theme.surfaceContainerHigh.opacity(0.5), lineWidth: 2.5)
+                        .frame(width: 44, height: 44)
                 }
                 
                 // Center Symbol
                 Image(systemName: icon)
-                    .font(.system(size: 30, weight: .light))
+                    .font(.system(size: 24, weight: .light))
                     .foregroundStyle(
                         LinearGradient(colors: [baseColor, accentColor], startPoint: .bottomLeading, endPoint: .topTrailing)
                     )
@@ -634,8 +632,8 @@ struct UnifiedConcentricGauge: View {
                 if metrics.innerTerm != nil {
                     Circle()
                         .trim(from: 0.0, to: innerRemaining)
-                        .stroke(midRingColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .frame(width: 54, height: 54)
+                        .stroke(midRingColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: 44, height: 44)
                         .rotationEffect(.degrees(-90))
                         .shadow(color: midRingColor.opacity(0.3), radius: 2, x: 0, y: 0)
                 }
@@ -643,8 +641,8 @@ struct UnifiedConcentricGauge: View {
                 // Middle Ring
                 Circle()
                     .trim(from: 0.0, to: middleRemaining)
-                    .stroke(midRingColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .frame(width: 68, height: 68)
+                    .stroke(midRingColor, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                    .frame(width: 56, height: 56)
                     .rotationEffect(.degrees(-90))
                     .shadow(color: midRingColor.opacity(0.4), radius: 3, x: 0, y: 0)
                 
@@ -653,48 +651,48 @@ struct UnifiedConcentricGauge: View {
                     .trim(from: 0.0, to: outerRemaining)
                     .stroke(
                         LinearGradient(colors: [baseColor, accentColor], startPoint: .bottom, endPoint: .top),
-                        style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
                     )
-                    .frame(width: 84, height: 84)
+                    .frame(width: 70, height: 70)
                     .rotationEffect(.degrees(-90))
                     .shadow(color: accentColor.opacity(0.6), radius: 4, x: 0, y: 0)
             }
-            .frame(width: 84, height: 84)
+            .frame(width: 70, height: 70)
             
             VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: 10, weight: .black))
                     .tracking(1.5)
                     .foregroundStyle(theme.textPrimary)
                 
                 if let outer = metrics.outerTerm, let outerLbl = outerLabel {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - outer) * 100))%")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
                         Text(outerLbl)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(accentColor)
                 }
                 if let middle = metrics.middleTerm, let middleLbl = middleLabel {
                     let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.5) : accentColor.opacity(0.8)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - middle) * 100))%")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
                         Text(middleLbl)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(color)
                 }
                 if let inner = metrics.innerTerm, let innerLbl = innerLabel {
                     let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.3) : accentColor.opacity(0.6)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - inner) * 100))%")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
                         Text(innerLbl)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(color)

@@ -205,12 +205,12 @@ struct InlineAddAccountView: View {
         let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
         var configuration: [String: String] = [:]
 
-        if selectedProvider == .claude || selectedProvider == .codex || selectedProvider == .antigravity {
+        if selectedProvider == .claude || selectedProvider == .codex || selectedProvider == .gemini || selectedProvider == .antigravity {
             configuration[Account.ConfigurationKey.planType] = "consumer"
         }
 
         let normalizedNameLower = normalizedName.lowercased()
-        if normalizedNameLower.contains("@") && (selectedProvider == .codex || selectedProvider == .antigravity || selectedProvider == .claude) {
+        if normalizedNameLower.contains("@") && (selectedProvider == .codex || selectedProvider == .gemini || selectedProvider == .antigravity || selectedProvider == .claude) {
             configuration[Account.ConfigurationKey.consumerEmail] = normalizedNameLower
         }
 

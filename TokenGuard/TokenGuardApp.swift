@@ -36,6 +36,7 @@ struct TokenGuardApp: App {
                 .environment(accountStore)
                 .environment(pollingEngine)
                 .environment(themeManager)
+                .preferredColorScheme(themeManager.currentTheme.isLight ? .light : .dark)
                 .frame(width: 400, height: 800)
                 .onAppear {
                     pollingEngine.start()
@@ -57,6 +58,7 @@ struct TokenGuardApp: App {
                 .environment(accountStore)
                 .environment(pollingEngine)
                 .environment(themeManager)
+                .preferredColorScheme(themeManager.currentTheme.isLight ? .light : .dark)
                 .frame(width: 400, height: 280)
         }
     }

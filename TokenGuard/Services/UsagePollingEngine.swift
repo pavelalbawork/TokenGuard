@@ -21,6 +21,7 @@ final class UsagePollingEngine {
     private let snapshotCache: UsageSnapshotCache
     private let providers: [ServiceType: ServiceProvider]
     private let codexClient: CodexAppServerClient
+    private let refreshIntervalProvider: @Sendable () -> TimeInterval?
     private let sleep: @Sendable (TimeInterval) async -> Void
 
     var serviceRefreshIntervals: [ServiceType: TimeInterval]
@@ -42,8 +43,17 @@ final class UsagePollingEngine {
         serviceRefreshIntervals: [ServiceType: TimeInterval] = [
             .claude: 300,
             .codex: 5,
+            .gemini: 60,
             .antigravity: 30
         ],
+        refreshIntervalProvider: @escaping @Sendable () -> TimeInterval? = {
+            let defaults = UserDefaults.standard
+            guard defaults.object(forKey: "globalRefreshIntervalMins") != nil else {
+                return nil
+            }
+            let minutes = defaults.integer(forKey: "globalRefreshIntervalMins")
+            return minutes > 0 ? TimeInterval(minutes * 60) : nil
+        },
         sleep: @escaping @Sendable (TimeInterval) async -> Void = { interval in
             let nanoseconds = UInt64(max(interval, 0) * 1_000_000_000)
             try? await Task.sleep(nanoseconds: nanoseconds)
@@ -56,9 +66,11 @@ final class UsagePollingEngine {
         self.providers = providers ?? [
             .claude: AnthropicProvider(),
             .codex: OpenAIProvider(codexLiveStateProvider: codexClient),
+            .gemini: GeminiCLIProvider(),
             .antigravity: AntigravityProvider()
         ]
         self.serviceRefreshIntervals = serviceRefreshIntervals
+        self.refreshIntervalProvider = refreshIntervalProvider
         self.sleep = sleep
         self.accountStates = UsagePollingEngine.initialAccountStates(
             accounts: accountStore.accounts,
@@ -232,18 +244,16 @@ final class UsagePollingEngine {
         accountStates = updatedStates
     }
 
-    private var pollCadence: TimeInterval {
-        let activeServiceTypes = Set(
-            accountStore.accounts
-                .filter(\.isEnabled)
-                .map(\.serviceType)
-        )
+    var pollCadence: TimeInterval {
+        let pollableAccounts = accountStore.accounts
+            .filter(\.isEnabled)
+            .filter { shouldPoll($0) }
 
-        guard !activeServiceTypes.isEmpty else {
+        guard !pollableAccounts.isEmpty else {
             return 300
         }
 
-        let activeIntervals = activeServiceTypes.compactMap { serviceRefreshIntervals[$0] }
+        let activeIntervals = pollableAccounts.map { refreshInterval(for: $0) }
         return max(activeIntervals.min() ?? 300, 1)
     }
 
@@ -319,11 +329,15 @@ final class UsagePollingEngine {
     }
 
     private func shouldRefresh(_ account: Account) -> Bool {
-        let interval = serviceRefreshIntervals[account.serviceType] ?? 300
+        let interval = refreshInterval(for: account)
         guard let lastAttempt = accountStates[account.id]?.lastAttemptAt else {
             return true
         }
         return Date().timeIntervalSince(lastAttempt) >= interval
+    }
+
+    private func refreshInterval(for account: Account) -> TimeInterval {
+        refreshIntervalProvider() ?? serviceRefreshIntervals[account.serviceType] ?? 300
     }
 
     private static func initialAccountStates(
