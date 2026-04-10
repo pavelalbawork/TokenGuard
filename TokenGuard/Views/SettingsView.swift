@@ -2,7 +2,6 @@ import SwiftUI
 import ServiceManagement
 
 struct SettingsView: View {
-    @Environment(UsagePollingEngine.self) private var pollingEngine
     @Environment(ThemeManager.self) private var themeManager
     
     @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
@@ -18,9 +17,8 @@ struct SettingsView: View {
         
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("SETTINGS")
+                Text("Settings")
                     .font(.system(size: 14, weight: .black))
-                    .tracking(1.0)
                     .foregroundStyle(theme.textPrimary)
 
                 Text("Adjust how TokenGuard looks, refreshes, and organizes providers.")
@@ -45,6 +43,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .fixedSize()
+                    .accessibilityLabel("Theme")
                 }
                 .padding(10)
                 .background(settingsRowBackground(for: theme))
@@ -65,6 +64,7 @@ struct SettingsView: View {
                         .toggleStyle(.switch)
                         .labelsHidden()
                         .controlSize(.small)
+                        .accessibilityLabel("Launch at login")
                 }
                 .padding(10)
                 .background(settingsRowBackground(for: theme))
@@ -89,6 +89,7 @@ struct SettingsView: View {
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(theme.error)
                         .padding(.horizontal, 4)
+                        .accessibilityLabel(error)
                 }
             }
             
@@ -111,6 +112,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .fixedSize()
+                    .accessibilityLabel("Refresh interval")
                 }
                 .padding(10)
                 .background(settingsRowBackground(for: theme))
@@ -126,6 +128,7 @@ struct SettingsView: View {
                     Text("Use arrows to reorder")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(theme.textSecondary)
+                        .accessibilityLabel("Use arrows to reorder providers")
                 }
                 
                 VStack(spacing: 0) {
@@ -185,10 +188,10 @@ struct SettingsView: View {
     
     @ViewBuilder
     private func sectionHeader(_ title: String, theme: Theme) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 9, weight: .heavy))
-            .tracking(1.5)
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(theme.textPrimary.opacity(0.8))
+            .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
@@ -197,7 +200,7 @@ struct SettingsView: View {
             Image(systemName: systemName)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(isDisabled ? theme.textSecondary.opacity(0.3) : theme.textPrimary)
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 5)
                         .fill(theme.isLight ? theme.surfaceContainerHigh.opacity(0.5) : theme.surfaceContainerHigh.opacity(0.45))
@@ -206,6 +209,8 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .contentShape(RoundedRectangle(cornerRadius: 5))
+        .accessibilityLabel(systemName == "chevron.up" ? "Move provider up" : "Move provider down")
+        .accessibilityHint("Reorders the provider list")
     }
 
     private func move(_ service: ServiceType, by offset: Int) {
@@ -224,10 +229,10 @@ struct SettingsView: View {
     }
 
     private func settingsRowBackground(for theme: Theme) -> Color {
-        theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.35)
+        theme.isLight ? theme.surfaceContainerHigh.opacity(0.75) : theme.surfaceContainerHigh.opacity(0.35)
     }
 
     private func settingsBorder(for theme: Theme) -> Color {
-        theme.isLight ? theme.border : theme.border
+        theme.isLight ? theme.border.opacity(0.85) : theme.border
     }
 }

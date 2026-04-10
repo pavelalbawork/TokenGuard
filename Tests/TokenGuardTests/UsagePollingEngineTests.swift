@@ -199,6 +199,68 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(engine.accountStates[firstAccount.id]?.snapshot?.windows.first?.used, 17)
     }
 
+    func testCodexConsumerAccountDoesNotDrivePollingCadence() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "codex@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer"
+            ]
+        )
+        try accountStore.add(account)
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            serviceRefreshIntervals: [.codex: 5],
+            refreshIntervalProvider: { nil },
+            sleep: { _ in }
+        )
+
+        XCTAssertEqual(engine.pollCadence, 300)
+    }
+
+    func testGlobalRefreshIntervalControlsPollableProviderCadence() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "gemini@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer"
+            ]
+        )
+        try accountStore.add(account)
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            serviceRefreshIntervals: [.gemini: 60],
+            refreshIntervalProvider: { 900 },
+            sleep: { _ in }
+        )
+
+        XCTAssertEqual(engine.pollCadence, 900)
+    }
+
     func testLoadsCachedSnapshotAndMarksItStaleOnRefreshFailure() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

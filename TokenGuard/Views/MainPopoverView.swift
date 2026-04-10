@@ -53,6 +53,7 @@ struct MainPopoverView: View {
                     .foregroundStyle(theme.textSecondary)
                     .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
+                    .accessibilityLabel("Refresh usage")
 
                     Button(action: {
                         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
@@ -68,6 +69,7 @@ struct MainPopoverView: View {
                     .foregroundStyle(theme.textSecondary)
                     .frame(width: 30, height: 30)
                     .contentShape(Rectangle())
+                    .accessibilityLabel("Add account")
                     
                 }
             }
@@ -170,6 +172,7 @@ struct MainPopoverView: View {
                         .foregroundStyle(theme.textSecondary.opacity(0.5))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Quit TokenGuard")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -180,7 +183,6 @@ struct MainPopoverView: View {
         .ignoresSafeArea()
     }
     
-    // Item 7: pull version from Bundle
     private var appVersion: String {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
@@ -221,6 +223,8 @@ struct MainPopoverView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(title.capitalized) tab")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
     }
 }
 
@@ -265,6 +269,7 @@ struct PopoverAccountEditRow: View {
 
     @State private var alias: String = ""
     @State private var isDeleteConfirmationPresented = false
+    @State private var mutationError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -302,11 +307,14 @@ struct PopoverAccountEditRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
                     .onChange(of: alias) { _, newValue in
-                        var updated = account
-                        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.alias = trimmed.isEmpty ? nil : trimmed
-                        try? accountStore.update(updated)
+                        updateAlias(newValue)
                     }
+
+                if let mutationError {
+                    Text(mutationError)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.error)
+                }
             }
         }
         .padding(12)
@@ -315,7 +323,7 @@ struct PopoverAccountEditRow: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
         .alert("Delete account?", isPresented: $isDeleteConfirmationPresented) {
             Button("Delete", role: .destructive) {
-                try? pollingEngine.deleteAccount(account)
+                deleteAccount()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -323,6 +331,28 @@ struct PopoverAccountEditRow: View {
         }
         .onAppear {
             alias = account.alias ?? ""
+        }
+    }
+
+    private func updateAlias(_ value: String) {
+        var updated = account
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.alias = trimmed.isEmpty ? nil : trimmed
+
+        do {
+            try accountStore.update(updated)
+            mutationError = nil
+        } catch {
+            mutationError = "Could not save alias: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteAccount() {
+        do {
+            try pollingEngine.deleteAccount(account)
+            mutationError = nil
+        } catch {
+            mutationError = "Could not delete account: \(error.localizedDescription)"
         }
     }
 }
@@ -661,16 +691,16 @@ struct UnifiedConcentricGauge: View {
             
             VStack(spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10, weight: .black))
+                    .font(.system(size: 11, weight: .black))
                     .tracking(1.5)
                     .foregroundStyle(theme.textPrimary)
                 
                 if let outer = metrics.outerTerm, let outerLbl = outerLabel {
                     HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - outer) * 100))%")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(outerLbl)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(accentColor)
@@ -679,9 +709,9 @@ struct UnifiedConcentricGauge: View {
                     let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.5) : accentColor.opacity(0.8)
                     HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - middle) * 100))%")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(middleLbl)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(color)
@@ -690,123 +720,14 @@ struct UnifiedConcentricGauge: View {
                     let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.3) : accentColor.opacity(0.6)
                     HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - inner) * 100))%")
-                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(innerLbl)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9, weight: .bold))
                             .tracking(1.0)
                     }
                     .foregroundStyle(color)
                 }
             }
         }
-    }
-}
-
-
-
-// MARK: - LIMITS VIEW FRONTEND
-
-struct LimitsView: View {
-    @Environment(AccountStore.self) private var accountStore
-    @Environment(UsagePollingEngine.self) private var pollingEngine
-    @Environment(ThemeManager.self) private var themeManager
-
-    var body: some View {
-        let theme = themeManager.currentTheme
-
-        VStack(alignment: .leading, spacing: 20) {
-            // Header
-            VStack(alignment: .leading, spacing: 4) {
-                Text("API CAPACITIES")
-                    .font(.system(size: 14, weight: .black))
-                    .tracking(1.0)
-                    .foregroundStyle(theme.textPrimary)
-                
-                Text("Maximum hard limits established by the providers.")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(theme.textSecondary)
-            }
-            .padding(.horizontal, 16)
-            
-            // Capabilities List
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(filteredServices, id: \.self) { serviceType in
-                        let accounts = accountStore.accounts.filter { $0.serviceType == serviceType }
-                        if !accounts.isEmpty {
-                            providerLimitsCard(serviceType: serviceType, accounts: accounts, theme: theme)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
-            }
-        }
-        .padding(.top, 16)
-    }
-
-    private var filteredServices: [ServiceType] {
-        ServiceType.allCases.filter { type in
-            accountStore.accounts.contains(where: { $0.serviceType == type })
-        }
-    }
-
-    @ViewBuilder
-    private func providerLimitsCard(serviceType: ServiceType, accounts: [Account], theme: Theme) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Provider Header
-            HStack(spacing: 6) {
-                Image(systemName: serviceType.iconName)
-                    .font(.system(size: 12))
-                    .rotationEffect(.degrees(serviceType.rotationAngle))
-                    .foregroundStyle(serviceType.tintColor(for: theme))
-                Text(serviceType.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(1.5)
-                    .foregroundStyle(theme.textPrimary)
-                Spacer()
-            }
-            .padding(.bottom, 4)
-            
-            // Extracted Limits
-            ForEach(accounts) { account in
-                if let snapshot = pollingEngine.accountStates[account.id]?.snapshot {
-                    ForEach(snapshot.windows) { window in
-                        HStack {
-                            Text(window.label ?? window.windowType.defaultLabel)
-                                .font(.system(size: 9, weight: .bold))
-                                .textCase(.uppercase)
-                                .foregroundStyle(theme.textSecondary)
-                            
-                            Spacer()
-                            
-                            if let limit = window.limit {
-                                Text("\(IntegerFormatStyle<Int>().format(Int(limit)))\(window.unit.suffix)")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(theme.secondaryAccent)
-                            } else {
-                                Text("UNKNOWN")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundStyle(theme.textSecondary)
-                            }
-                        }
-                        .padding(8)
-                        .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                } else {
-                    Text("Fetching capacities...")
-                        .font(.system(size: 9, weight: .light))
-                        .foregroundStyle(theme.textSecondary.opacity(0.5))
-                }
-            }
-        }
-        .padding(12)
-        .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(theme.border, lineWidth: 1)
-        )
     }
 }

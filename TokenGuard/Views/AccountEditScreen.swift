@@ -45,6 +45,7 @@ struct AccountEditRow: View {
 
     @State private var alias: String = ""
     @State private var showDeleteConfirmation = false
+    @State private var mutationError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -82,11 +83,14 @@ struct AccountEditRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
                     .onChange(of: alias) { _, newValue in
-                        var updated = account
-                        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.alias = trimmed.isEmpty ? nil : trimmed
-                        try? accountStore.update(updated)
+                        updateAlias(newValue)
                     }
+
+                if let mutationError {
+                    Text(mutationError)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.error)
+                }
             }
         }
         .padding(12)
@@ -95,7 +99,7 @@ struct AccountEditRow: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
         .alert("Delete account?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
-                try? pollingEngine.deleteAccount(account)
+                deleteAccount()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -103,6 +107,28 @@ struct AccountEditRow: View {
         }
         .onAppear {
             alias = account.alias ?? ""
+        }
+    }
+
+    private func updateAlias(_ value: String) {
+        var updated = account
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.alias = trimmed.isEmpty ? nil : trimmed
+
+        do {
+            try accountStore.update(updated)
+            mutationError = nil
+        } catch {
+            mutationError = "Could not save alias: \(error.localizedDescription)"
+        }
+    }
+
+    private func deleteAccount() {
+        do {
+            try pollingEngine.deleteAccount(account)
+            mutationError = nil
+        } catch {
+            mutationError = "Could not delete account: \(error.localizedDescription)"
         }
     }
 }

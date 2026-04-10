@@ -156,6 +156,34 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertTrue(didUpdate)
     }
 
+    func testCodexClientReportsSessionLaunchFailureWithoutCrashing() async throws {
+        let client = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory {
+                throw ServiceProviderError.unavailable("codex app-server missing")
+            },
+            sleep: { interval in
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            },
+            reconnectBackoff: [0, 60]
+        )
+
+        await client.start()
+
+        var didReportError = false
+        for _ in 0..<50 {
+            let state = await client.currentState()
+            if state.status == .error,
+               state.lastErrorText == "codex app-server missing" {
+                didReportError = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertTrue(didReportError)
+        await client.stop()
+    }
+
     func testCodexClientUpdatesIdentityIndependentlyFromRateLimits() async throws {
         let session = makeBootstrapCodexSession(
             email: "old@example.com",

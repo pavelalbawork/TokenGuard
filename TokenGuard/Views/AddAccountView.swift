@@ -184,7 +184,10 @@ struct InlineAddAccountView: View {
         let normalizedAlias = accountAlias.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
-                let account = try await buildAccount(named: normalizedEmail, alias: normalizedAlias.isEmpty ? nil : normalizedAlias)
+                let account = try await buildValidatedAccount(
+                    email: normalizedEmail,
+                    alias: normalizedAlias.isEmpty ? nil : normalizedAlias
+                )
                 try accountStore.add(account)
                 await pollingEngine.refreshAll(force: true)
                 await MainActor.run {
@@ -194,39 +197,106 @@ struct InlineAddAccountView: View {
             } catch {
                 await MainActor.run {
                     isSaving = false
-                    let errorDesc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    statusMessage = "Unable to verify local state. Ensure CLI is authenticated. (\(errorDesc))"
+                    statusMessage = validationErrorMessage(for: error)
                 }
             }
         }
     }
 
-    private func buildAccount(named normalizedName: String, alias: String?) async throws -> Account {
+    private func buildValidatedAccount(email: String, alias: String?) async throws -> Account {
+        let normalizedEmail = normalizedIdentity(email)
+        guard let normalizedEmail, !normalizedEmail.isEmpty else {
+            throw AddAccountValidationError.missingEmail
+        }
+
+        let provider = provider(for: selectedProvider)
+        let detectedIdentity = try await consumerIdentityIfAvailable(for: provider)
+
+        if let detectedEmail = normalizedIdentity(detectedIdentity?.email),
+           detectedEmail != normalizedEmail {
+            throw AddAccountValidationError.identityMismatch(
+                provider: selectedProvider.rawValue.capitalized,
+                detectedEmail: detectedEmail,
+                enteredEmail: normalizedEmail
+            )
+        }
+
         let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
-        var configuration: [String: String] = [:]
+        var configuration: [String: String] = [
+            Account.ConfigurationKey.planType: "consumer"
+        ]
 
-        if selectedProvider == .claude || selectedProvider == .codex || selectedProvider == .gemini || selectedProvider == .antigravity {
-            configuration[Account.ConfigurationKey.planType] = "consumer"
+        let consumerEmail = normalizedIdentity(detectedIdentity?.email) ?? normalizedEmail
+        configuration[Account.ConfigurationKey.consumerEmail] = consumerEmail
+        if let externalID = normalizedIdentity(detectedIdentity?.externalID) {
+            configuration[Account.ConfigurationKey.consumerExternalID] = externalID
         }
 
-        let normalizedNameLower = normalizedName.lowercased()
-        if normalizedNameLower.contains("@") && (selectedProvider == .codex || selectedProvider == .gemini || selectedProvider == .antigravity || selectedProvider == .claude) {
-            configuration[Account.ConfigurationKey.consumerEmail] = normalizedNameLower
-        }
-
-        if selectedProvider == .antigravity,
-           configuration[Account.ConfigurationKey.consumerEmail] == nil,
-           let identity = try await AntigravityProvider().currentConsumerIdentity(),
-           let email = identity.email {
-            configuration[Account.ConfigurationKey.consumerEmail] = email
-        }
-
-        return Account(
-            name: normalizedName,
+        let account = Account(
+            name: normalizedEmail,
             alias: alias,
             serviceType: selectedProvider,
             credentialRef: credentialRef,
             configuration: configuration
         )
+
+        guard try await provider.validateCredentials(account: account, credential: "") else {
+            throw AddAccountValidationError.providerStateUnavailable(provider: selectedProvider.rawValue.capitalized)
+        }
+
+        return account
+    }
+
+    private func provider(for serviceType: ServiceType) -> any ServiceProvider {
+        switch serviceType {
+        case .claude:
+            AnthropicProvider()
+        case .codex:
+            OpenAIProvider()
+        case .gemini:
+            GeminiCLIProvider()
+        case .antigravity:
+            AntigravityProvider()
+        }
+    }
+
+    private func consumerIdentityIfAvailable(for provider: any ServiceProvider) async throws -> ConsumerAccountIdentity? {
+        guard let detector = provider as? any ConsumerAccountDetecting else {
+            return nil
+        }
+        return try await detector.currentConsumerIdentity()
+    }
+
+    private func validationErrorMessage(for error: Error) -> String {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription,
+           !description.isEmpty {
+            return description
+        }
+
+        return "Unable to verify local provider state. \(error.localizedDescription)"
+    }
+
+    private func normalizedIdentity(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private enum AddAccountValidationError: LocalizedError {
+    case missingEmail
+    case identityMismatch(provider: String, detectedEmail: String, enteredEmail: String)
+    case providerStateUnavailable(provider: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingEmail:
+            return "Enter the email or identifier shown by the signed-in local provider."
+        case let .identityMismatch(provider, detectedEmail, enteredEmail):
+            return "\(provider) is signed into \(detectedEmail), not \(enteredEmail). Switch the local \(provider) session or enter the active account before saving."
+        case let .providerStateUnavailable(provider):
+            return "TokenGuard could not verify local \(provider) state on this Mac. Open the provider CLI/app, confirm you are signed in, then try again."
+        }
     }
 }

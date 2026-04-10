@@ -145,17 +145,17 @@ extension Theme {
         id: "systemLight",
         name: "Light: System Default",
         isLight: true,
-        backgroundMain: Color(hex: "#f5f5f7"),
+        backgroundMain: Color(hex: "#f3f4f6"),
         surface: Color(hex: "#ffffff"),
-        surfaceContainer: Color(hex: "#f2f2f7"),
-        surfaceContainerHigh: Color(hex: "#e5e5ea"),
-        textPrimary: Color(hex: "#000000"),
-        textSecondary: Color(hex: "#3c3c43"),
-        primaryAccent: Color(hex: "#007aff"), // Apple Blue
-        secondaryAccent: Color(hex: "#005f99"),
+        surfaceContainer: Color(hex: "#eef2f7"),
+        surfaceContainerHigh: Color(hex: "#dfe5ee"),
+        textPrimary: Color(hex: "#0f172a"),
+        textSecondary: Color(hex: "#334155"),
+        primaryAccent: Color(hex: "#0a65cc"), // Apple Blue
+        secondaryAccent: Color(hex: "#0f4c81"),
         tertiaryAccent: Color(hex: "#4b3fd4"),
-        border: Color(hex: "#8e8e93"),
-        error: Color(hex: "#ff3b30")
+        border: Color(hex: "#cbd5e1"),
+        error: Color(hex: "#dc2626")
     )
     
     public static let minimalLight = Theme(
@@ -164,15 +164,15 @@ extension Theme {
         isLight: true,
         backgroundMain: Color(hex: "#ffffff"),
         surface: Color(hex: "#ffffff"),
-        surfaceContainer: Color(hex: "#f9f9f9"),
-        surfaceContainerHigh: Color(hex: "#f0f0f0"),
-        textPrimary: Color(hex: "#111111"),
-        textSecondary: Color(hex: "#3f3f46"),
-        primaryAccent: Color(hex: "#000000"),
-        secondaryAccent: Color(hex: "#333333"),
-        tertiaryAccent: Color(hex: "#52525b"),
-        border: Color(hex: "#b8b8b8"),
-        error: Color(hex: "#d93025")
+        surfaceContainer: Color(hex: "#f5f7fb"),
+        surfaceContainerHigh: Color(hex: "#e8edf4"),
+        textPrimary: Color(hex: "#111827"),
+        textSecondary: Color(hex: "#334155"),
+        primaryAccent: Color(hex: "#111827"),
+        secondaryAccent: Color(hex: "#374151"),
+        tertiaryAccent: Color(hex: "#4b5563"),
+        border: Color(hex: "#cbd5e1"),
+        error: Color(hex: "#d92319")
     )
     
     public static let all: [Theme] = [

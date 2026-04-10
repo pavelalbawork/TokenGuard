@@ -196,10 +196,10 @@ final class MockCodexAppServerSession: CodexAppServerSession, @unchecked Sendabl
 }
 
 struct MockCodexAppServerSessionFactory: CodexAppServerSessionFactory {
-    let makeSessionHandler: @Sendable () -> CodexAppServerSession
+    let makeSessionHandler: @Sendable () throws -> CodexAppServerSession
 
     func makeSession() throws -> CodexAppServerSession {
-        makeSessionHandler()
+        try makeSessionHandler()
     }
 }
 

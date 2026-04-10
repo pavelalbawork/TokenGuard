@@ -9,7 +9,6 @@ struct ServiceSectionView: View {
     @Environment(UsagePollingEngine.self) private var pollingEngine
 
     var body: some View {
-        let activeConsumerAccountId = accountStore.activeConsumerAccountID(for: serviceType)
         let theme = themeManager.currentTheme
 
         VStack(alignment: .leading, spacing: 10) {
@@ -21,32 +20,23 @@ struct ServiceSectionView: View {
                     .rotationEffect(.degrees(serviceType.rotationAngle))
                     .foregroundStyle(serviceType.tintColor(for: theme))
 
-                Text(serviceType.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .black))
-                    .tracking(2.0)
+                Text(serviceType.rawValue.capitalized)
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
 
-                // Tier / LIVE badges for single-account case
-                if accounts.count == 1, let account = accounts.first {
-                    if activeConsumerAccountId == account.id {
-                        Text("LIVE")
-                            .font(.system(size: 8, weight: .bold))
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(serviceType.tintColor(for: theme).opacity(0.12), in: .rect(cornerRadius: 3))
-                            .foregroundStyle(serviceType.tintColor(for: theme))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
+                if accounts.count == 1, let account = accounts.first,
+                   let state = pollingEngine.accountStates[account.id],
+                   let status = displayStatus(for: account, state: state) {
+                    statusBadge(status, theme: theme, serviceTint: serviceType.tintColor(for: theme))
                 }
 
                 Spacer()
 
                 // Single-account email badge
                 if accounts.count == 1, let account = accounts.first {
-                    accountBadge(account: account, activeId: activeConsumerAccountId, theme: theme)
+                    accountBadge(account: account, theme: theme)
                 }
             }
 
@@ -60,29 +50,22 @@ struct ServiceSectionView: View {
                                 .font(.system(size: 9, weight: .regular))
                                 .foregroundStyle(serviceType.tintColor(for: theme))
 
-                            Text(account.displayName.uppercased())
-                                .font(.system(size: 8, weight: .black))
-                                .tracking(0.5)
+                            Text(account.displayName)
+                                .font(.system(size: 9, weight: .semibold))
                                 .foregroundStyle(theme.textSecondary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
 
-                            if activeConsumerAccountId == account.id {
-                                Text("LIVE")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 2)
-                                    .background(serviceType.tintColor(for: theme).opacity(0.12), in: .rect(cornerRadius: 3))
-                                    .foregroundStyle(serviceType.tintColor(for: theme))
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
+                            if let state = pollingEngine.accountStates[account.id],
+                               let status = displayStatus(for: account, state: state) {
+                                statusBadge(status, theme: theme, serviceTint: serviceType.tintColor(for: theme))
                             }
 
                             Spacer()
                         }
                     }
 
-                    accountCard(account: account, isLive: activeConsumerAccountId == account.id, theme: theme)
+                    accountCard(account: account, theme: theme)
                 }
             }
         }
@@ -91,19 +74,19 @@ struct ServiceSectionView: View {
     // MARK: - Subviews
 
     @ViewBuilder
-    private func accountCard(account: Account, isLive: Bool, theme: Theme) -> some View {
+    private func accountCard(account: Account, theme: Theme) -> some View {
         AccountCardView(account: account)
     }
 
     @ViewBuilder
-    private func accountBadge(account: Account, activeId: UUID?, theme: Theme) -> some View {
+    private func accountBadge(account: Account, theme: Theme) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "person.crop.square.fill")
                 .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(serviceType.tintColor(for: theme))
 
-            Text(account.displayName.uppercased())
-                .font(.system(size: 8, weight: .black))
+            Text(account.displayName)
+                .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -113,41 +96,92 @@ struct ServiceSectionView: View {
         .padding(.vertical, 4)
         .background(theme.isLight ? theme.surfaceContainer : theme.surfaceContainerHigh.opacity(0.3))
         .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border, lineWidth: 1))
+        .accessibilityLabel("\(account.displayName) account")
     }
 
     @ViewBuilder
-    private func connectionBadge(_ status: CodexConnectionStatus, theme: Theme) -> some View {
-        Text(connectionLabel(for: status))
+    private func statusBadge(_ status: AccountDisplayStatus, theme: Theme, serviceTint: Color) -> some View {
+        Text(status.label)
             .font(.system(size: 8, weight: .bold))
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .background(connectionColor(for: status, theme: theme).opacity(0.12), in: .rect(cornerRadius: 3))
-            .foregroundStyle(connectionColor(for: status, theme: theme))
+            .background(statusColor(for: status, theme: theme, serviceTint: serviceTint).opacity(0.12), in: .rect(cornerRadius: 3))
+            .foregroundStyle(statusColor(for: status, theme: theme, serviceTint: serviceTint))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
+            .accessibilityLabel(status.accessibilityLabel)
     }
 
-    private func connectionLabel(for status: CodexConnectionStatus) -> String {
-        switch status {
-        case .live:
-            return "LIVE"
-        case .staleFallback:
-            return "STALE"
-        case .connecting:
-            return "RECONNECTING"
-        case .error:
-            return "ERROR"
+    private func displayStatus(for account: Account, state: UsagePollingEngine.AccountRefreshState) -> AccountDisplayStatus? {
+        if state.connectionStatus == .connecting {
+            return .reconnecting
         }
+
+        if let snapshot = state.snapshot {
+            if snapshot.isStale || state.errorMessage != nil {
+                return .stale
+            }
+
+            if account.planType == "consumer",
+               activeConsumerAccountID(for: account) != account.id {
+                return nil
+            }
+
+            return .live
+        }
+
+        if state.errorMessage != nil {
+            return .error
+        }
+
+        return nil
     }
 
-    private func connectionColor(for status: CodexConnectionStatus, theme: Theme) -> Color {
+    private func activeConsumerAccountID(for account: Account) -> UUID? {
+        accountStore.activeConsumerAccountID(for: account.serviceType)
+    }
+
+    private func statusColor(for status: AccountDisplayStatus, theme: Theme, serviceTint: Color) -> Color {
         switch status {
         case .live:
-            return serviceType.tintColor(for: theme)
-        case .staleFallback, .connecting:
+            return serviceTint
+        case .stale, .reconnecting:
             return theme.secondaryAccent
         case .error:
             return theme.error
+        }
+    }
+
+    private enum AccountDisplayStatus {
+        case live
+        case stale
+        case error
+        case reconnecting
+
+        var label: String {
+            switch self {
+            case .live:
+                return "LIVE"
+            case .stale:
+                return "STALE"
+            case .error:
+                return "ERROR"
+            case .reconnecting:
+                return "RECONNECTING"
+            }
+        }
+
+        var accessibilityLabel: String {
+            switch self {
+            case .live:
+                return "Live"
+            case .stale:
+                return "Stale"
+            case .error:
+                return "Error"
+            case .reconnecting:
+                return "Reconnecting"
+            }
         }
     }
 }

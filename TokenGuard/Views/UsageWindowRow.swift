@@ -3,28 +3,26 @@ import SwiftUI
 struct UsageWindowRow: View {
     let window: UsageWindow
     @Environment(ThemeManager.self) private var themeManager
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        let theme = themeManager.currentTheme
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .bottom) {
                 Text(window.label ?? window.windowType.defaultLabel)
-                    .font(.system(size: 9, weight: .bold))
-                    .textCase(.uppercase)
-                    .tracking(1.5)
-                    .foregroundStyle(themeManager.currentTheme.textSecondary)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.88 : 0.82))
 
                 Spacer()
 
                 HStack(spacing: 6) {
                     if let resetDate = window.resetDate {
                         CountdownTimerText(resetDate: resetDate)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundStyle(themeManager.currentTheme.textSecondary.opacity(0.5))
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.7 : 0.52))
                     }
                     
                     Text(valueText)
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(valueColor)
                 }
             }
@@ -33,10 +31,17 @@ struct UsageWindowRow: View {
                 UsageProgressBar(window: window)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var valueColor: Color {
-        return themeManager.currentTheme.textPrimary
+        themeManager.currentTheme.textPrimary
+    }
+
+    private var accessibilityLabel: String {
+        let label = window.label ?? window.windowType.defaultLabel
+        return "\(label), \(valueText)"
     }
 
     private var valueText: String {
