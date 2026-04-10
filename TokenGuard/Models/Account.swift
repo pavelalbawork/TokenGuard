@@ -20,11 +20,20 @@ import SwiftUI
 
 extension ServiceType {
     func tintColor(for theme: Theme) -> Color {
-        switch self {
-        case .claude: return theme.primaryAccent
-        case .codex: return theme.primaryAccent
-        case .gemini: return theme.primaryAccent
-        case .antigravity: return theme.primaryAccent
+        if theme.id == "pastelDash" {
+            switch self {
+            case .codex: return theme.primaryAccent
+            case .claude: return theme.secondaryAccent
+            case .gemini: return theme.tertiaryAccent
+            case .antigravity: return theme.quaternaryAccent
+            }
+        } else {
+            switch self {
+            case .claude: return theme.primaryAccent
+            case .codex: return theme.primaryAccent
+            case .gemini: return theme.primaryAccent
+            case .antigravity: return theme.primaryAccent
+            }
         }
     }
 

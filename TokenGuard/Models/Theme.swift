@@ -19,12 +19,13 @@ public struct Theme: Identifiable, Equatable, Sendable {
     public let primaryAccent: Color
     public let secondaryAccent: Color
     public let tertiaryAccent: Color
+    public let quaternaryAccent: Color
     
     // Functional
     public let border: Color
     public let error: Color
     
-    public init(id: String, name: String, isLight: Bool = false, backgroundMain: Color, surface: Color, surfaceContainer: Color, surfaceContainerHigh: Color, textPrimary: Color, textSecondary: Color, primaryAccent: Color, secondaryAccent: Color, tertiaryAccent: Color, border: Color, error: Color) {
+    public init(id: String, name: String, isLight: Bool = false, backgroundMain: Color, surface: Color, surfaceContainer: Color, surfaceContainerHigh: Color, textPrimary: Color, textSecondary: Color, primaryAccent: Color, secondaryAccent: Color, tertiaryAccent: Color, quaternaryAccent: Color? = nil, border: Color, error: Color) {
         self.id = id
         self.name = name
         self.isLight = isLight
@@ -37,6 +38,7 @@ public struct Theme: Identifiable, Equatable, Sendable {
         self.primaryAccent = primaryAccent
         self.secondaryAccent = secondaryAccent
         self.tertiaryAccent = tertiaryAccent
+        self.quaternaryAccent = quaternaryAccent ?? primaryAccent
         self.border = border
         self.error = error
     }
@@ -126,26 +128,27 @@ extension Theme {
         error: Color(hex: "#d93025")
     )
     
-    public static let silverLavender = Theme(
-        id: "silverLavender",
-        name: "Light: Silver & Lavender",
+    public static let pastelDash = Theme(
+        id: "pastelDash",
+        name: "Light: Pastel Dash",
         isLight: true,
-        backgroundMain: Color(hex: "#d3d5d8"),     // Soft silver gray
-        surface: Color(hex: "#e4e6e9"),            // Elevated lighter silver
-        surfaceContainer: Color(hex: "#c7cbd0"),   // Inset gray
-        surfaceContainerHigh: Color(hex: "#b4b8be"), // Deep inset gray
-        textPrimary: Color(hex: "#2d2f36"),        // Soft deep slate (not harsh black)
-        textSecondary: Color(hex: "#565963"),      // Muted slate gray
-        primaryAccent: Color(hex: "#8b7ed6"),      // Soft vibrant lavender
-        secondaryAccent: Color(hex: "#a59be0"),    // Lighter lavender
-        tertiaryAccent: Color(hex: "#6b5cbf"),     // Deeper royal lavender
-        border: Color(hex: "#b6b8bd"),
-        error: Color(hex: "#d16b77")               // Soft muted coral
+        backgroundMain: Color(hex: "#f4f5f7"),     // Very light gray/white background
+        surface: Color(hex: "#ffffff"),            // Pure white cards
+        surfaceContainer: Color(hex: "#eaecf0"),   // Soft light gray
+        surfaceContainerHigh: Color(hex: "#dfe2e6"), // Deeper light gray
+        textPrimary: Color(hex: "#334155"),        // Sharp dark slate text
+        textSecondary: Color(hex: "#64748b"),      // Muted secondary text
+        primaryAccent: Color(hex: "#6B7AFA"),      // Soft purple/blue (Codex)
+        secondaryAccent: Color(hex: "#7FE5FA"),    // Light sky cyan (Claude)
+        tertiaryAccent: Color(hex: "#00C49A"),     // Viridian teal (Gemini)
+        quaternaryAccent: Color(hex: "#9AE692"),   // Lime green (AG)
+        border: Color(hex: "#e2e8f0"),
+        error: Color(hex: "#ef4444")               // Standard red error
     )
     
     public static let all: [Theme] = [
         .luminous, .nordicFrost, .obsidianSilver, .mintTerminal,
-        .minimalLight, .silverLavender
+        .minimalLight, .pastelDash
     ]
 }
 

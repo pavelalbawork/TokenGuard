@@ -218,7 +218,7 @@ func makeBootstrapCodexSession(
 
         if id == 1 {
             session.emit(.stdout("""
-{"id":1,"result":{"userAgent":"Codex Desktop","codexHome":"/Users/palba/.codex","platformFamily":"unix","platformOs":"macos"}}
+{"id":1,"result":{"userAgent":"Codex Desktop","codexHome":"/Users/example/.codex","platformFamily":"unix","platformOs":"macos"}}
 """))
         }
 
