@@ -184,6 +184,9 @@ struct SettingsView: View {
             orderedServices = sorted
             launchAtLogin = SMAppService.mainApp.status == .enabled
         }
+        .preferredColorScheme(themeManager.currentTheme.isLight ? .light : .dark)
+        .environment(\.colorScheme, themeManager.currentTheme.isLight ? .light : .dark)
+        .tint(theme.primaryAccent)
     }
     
     @ViewBuilder

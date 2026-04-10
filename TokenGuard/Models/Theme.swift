@@ -130,16 +130,16 @@ extension Theme {
         id: "burgundyLight",
         name: "Light: Burgundy Minimal",
         isLight: true,
-        backgroundMain: Color(hex: "#faf9f9"),
-        surface: Color(hex: "#ffffff"),
-        surfaceContainer: Color(hex: "#f5f3f4"),
-        surfaceContainerHigh: Color(hex: "#eae6e7"),
+        backgroundMain: Color(hex: "#ece9ea"),     // Gray background
+        surface: Color(hex: "#f4f2f3"),            // Slightly lighter surface
+        surfaceContainer: Color(hex: "#e2dddf"),   // Darker container
+        surfaceContainerHigh: Color(hex: "#d9d5d6"),
         textPrimary: Color(hex: "#2b1c1e"),
         textSecondary: Color(hex: "#5c4f52"),
         primaryAccent: Color(hex: "#800020"),      // Burgundy
         secondaryAccent: Color(hex: "#b30030"),    // Lighter burgundy
         tertiaryAccent: Color(hex: "#4d0013"),     // Darker burgundy
-        border: Color(hex: "#e0d9db"),
+        border: Color(hex: "#cfc9cb"),
         error: Color(hex: "#d93025")
     )
     

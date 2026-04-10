@@ -80,15 +80,16 @@ struct MainPopoverView: View {
             .border(width: 1, edges: [.bottom], color: theme.border)
             .zIndex(1)
 
-            // Main Content Area
-            ScrollView {
-                VStack(spacing: 16) {
-                    if !heroServiceTypes.isEmpty {
-                        GlobalUsageHeroView()
-                    }
-                    
-                    // Router Content
-                    Group {
+            TimelineView(.periodic(from: Date(), by: 60)) { timeline in
+                // Main Content Area
+                ScrollView {
+                    VStack(spacing: 16) {
+                        if !heroServiceTypes.isEmpty {
+                            GlobalUsageHeroView()
+                        }
+
+                        // Router Content
+                        Group {
                         if isAddingAccount {
                             InlineAddAccountView(
                                 onCancel: {
@@ -135,7 +136,8 @@ struct MainPopoverView: View {
                                     ForEach(serviceTypes, id: \.self) { serviceType in
                                         ServiceSectionView(
                                             serviceType: serviceType,
-                                            accounts: accountStore.accounts.filter { $0.serviceType == serviceType }
+                                            accounts: accountStore.accounts.filter { $0.serviceType == serviceType },
+                                            referenceDate: timeline.date
                                         )
                                     }
                                 }
@@ -145,15 +147,16 @@ struct MainPopoverView: View {
                         } else if selectedTab == .settings {
                             SettingsView()
                         }
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAddingAccount)
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: selectedTab)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isAddingAccount)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 16)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 16)
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
             
             // Footer
             HStack {
@@ -414,7 +417,6 @@ struct GlobalUsageHeroView: View {
         var outerTerm: Double?
         var middleTerm: Double?
         var innerTerm: Double?
-        var isMiddleGrayedOut: Bool = false
     }
 
     @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
@@ -572,17 +574,15 @@ struct GlobalUsageHeroView: View {
             }
         }
 
-        var codex = ProviderMetrics(
+        let codex = ProviderMetrics(
             outerTerm: c_longCnt > 0 ? (c_longTot / Double(c_longCnt)) : nil,
             middleTerm: c_shortCnt > 0 ? (c_shortTot / Double(c_shortCnt)) : nil
         )
-        if let outer = codex.outerTerm, outer >= 1.0 { codex.isMiddleGrayedOut = true }
 
-        var claude = ProviderMetrics(
+        let claude = ProviderMetrics(
             outerTerm: cl_longCnt > 0 ? (cl_longTot / Double(cl_longCnt)) : nil,
             middleTerm: cl_shortCnt > 0 ? (cl_shortTot / Double(cl_shortCnt)) : nil
         )
-        if let outer = claude.outerTerm, outer >= 1.0 { claude.isMiddleGrayedOut = true }
 
         let gemini = ProviderMetrics(
             outerTerm: g_proCnt > 0 ? (g_proTot / Double(g_proCnt)) : nil,
@@ -614,8 +614,6 @@ struct UnifiedConcentricGauge: View {
     let accentColor: Color
     var rotation: Double = 0
     
-    @State private var isBreathing = false
-    
     var body: some View {
         let innerVal = metrics.innerTerm ?? 0.0
         let middleVal = metrics.middleTerm ?? 0.0
@@ -625,8 +623,7 @@ struct UnifiedConcentricGauge: View {
         let middleRemaining = CGFloat(max(0, 1.0 - min(middleVal, 1.0)))
         let outerRemaining = CGFloat(max(0, 1.0 - min(outerVal, 1.0)))
         
-        let pulseDuration = max(0.5, 3.0 * (1.0 - min(middleVal, 1.0)))
-        let midRingColor = metrics.isMiddleGrayedOut ? theme.surfaceContainerHigh.opacity(0.8) : baseColor
+        let midRingColor = baseColor
         
         VStack(spacing: 10) {
             ZStack {
@@ -651,12 +648,7 @@ struct UnifiedConcentricGauge: View {
                     )
                     .shadow(color: accentColor.opacity(0.3), radius: 6, x: 0, y: 0)
                     .rotationEffect(.degrees(rotation))
-                    .scaleEffect(isBreathing ? 1.05 : 0.95)
-                    .opacity(isBreathing ? 1.0 : 0.6)
-                    .animation(.easeInOut(duration: pulseDuration).repeatForever(autoreverses: true), value: isBreathing)
-                    .onAppear {
-                        isBreathing = true
-                    }
+                    .opacity(0.9)
                 
                 // Inner Ring
                 if metrics.innerTerm != nil {
@@ -706,7 +698,7 @@ struct UnifiedConcentricGauge: View {
                     .foregroundStyle(accentColor)
                 }
                 if let middle = metrics.middleTerm, let middleLbl = middleLabel {
-                    let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.5) : accentColor.opacity(0.8)
+                    let color = accentColor.opacity(0.8)
                     HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - middle) * 100))%")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -717,7 +709,7 @@ struct UnifiedConcentricGauge: View {
                     .foregroundStyle(color)
                 }
                 if let inner = metrics.innerTerm, let innerLbl = innerLabel {
-                    let color = metrics.isMiddleGrayedOut ? theme.textSecondary.opacity(0.3) : accentColor.opacity(0.6)
+                    let color = accentColor.opacity(0.6)
                     HStack(spacing: 3) {
                         Text("\(Int(max(0, 1.0 - inner) * 100))%")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))

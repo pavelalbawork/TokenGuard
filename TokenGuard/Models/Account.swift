@@ -21,10 +21,10 @@ import SwiftUI
 extension ServiceType {
     func tintColor(for theme: Theme) -> Color {
         switch self {
-        case .claude: return theme.secondaryAccent
+        case .claude: return theme.primaryAccent
         case .codex: return theme.primaryAccent
-        case .gemini: return theme.primaryAccent.opacity(0.8)
-        case .antigravity: return theme.textPrimary
+        case .gemini: return theme.primaryAccent
+        case .antigravity: return theme.primaryAccent
         }
     }
 
