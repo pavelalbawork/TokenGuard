@@ -83,6 +83,7 @@ final class UsagePollingEngine {
         )
         self.isRefreshing = false
         self.backgroundErrorMessage = nil
+        normalizeExpiredSnapshots()
     }
 
     deinit {
@@ -132,6 +133,7 @@ final class UsagePollingEngine {
         var shouldForce = force
 
         repeat {
+            normalizeExpiredSnapshots()
             await synchronizeActiveConsumerAccounts(force: shouldForce)
             if shouldForce {
                 await codexClient.requestImmediateRefresh()
@@ -183,6 +185,7 @@ final class UsagePollingEngine {
     }
 
     func refresh(accountID: UUID) async {
+        normalizeExpiredSnapshots()
         await synchronizeActiveConsumerAccounts(force: true)
 
         guard let account = accountStore.accounts.first(where: { $0.id == accountID }),
@@ -435,6 +438,40 @@ final class UsagePollingEngine {
         mutate(&state)
         updatedStates[accountID] = state
         accountStates = updatedStates
+    }
+
+    private func normalizeExpiredSnapshots(now: Date = Date()) {
+        var updatedStates = accountStates
+        var didChangeAnyState = false
+
+        for (accountID, state) in accountStates {
+            guard let account = accountStore.accounts.first(where: { $0.id == accountID }) else {
+                continue
+            }
+            guard account.planType == "consumer",
+                  accountStore.activeConsumerAccountID(for: account.serviceType) != account.id else {
+                continue
+            }
+            guard let snapshot = state.snapshot else { continue }
+            let normalized = snapshot.resettingExpiredWindows(now: now)
+            guard normalized != snapshot else { continue }
+
+            var updatedState = state
+            updatedState.snapshot = normalized
+            updatedStates[accountID] = updatedState
+            didChangeAnyState = true
+
+            do {
+                try snapshotCache.save(snapshot: normalized)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not save normalized usage snapshot", error)
+            }
+        }
+
+        if didChangeAnyState {
+            accountStates = updatedStates
+        }
     }
 
     private nonisolated static func pollingCredential(

@@ -97,6 +97,56 @@ struct UsageWindow: Codable, Hashable, Sendable, Identifiable {
         self.resetDate = resetDate
         self.label = label
     }
+
+    func resettingIfNeeded(
+        now: Date,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> UsageWindow {
+        guard let resetDate, resetDate <= now else {
+            return self
+        }
+
+        return UsageWindow(
+            windowType: windowType,
+            used: 0,
+            limit: limit,
+            unit: unit,
+            resetDate: nextResetDate(after: now, previousResetDate: resetDate, calendar: calendar),
+            label: label
+        )
+    }
+
+    private func nextResetDate(
+        after now: Date,
+        previousResetDate: Date,
+        calendar: Calendar
+    ) -> Date? {
+        switch windowType {
+        case .rolling5h:
+            return advancing(previousResetDate, after: now, by: 5 * 60 * 60)
+        case .daily:
+            return advancing(previousResetDate, after: now, by: 24 * 60 * 60)
+        case .weekly:
+            return advancing(previousResetDate, after: now, by: 7 * 24 * 60 * 60)
+        case .monthly:
+            var next = previousResetDate
+            while next <= now {
+                guard let advanced = calendar.date(byAdding: .month, value: 1, to: next) else {
+                    return nil
+                }
+                next = advanced
+            }
+            return next
+        }
+    }
+
+    private func advancing(_ date: Date, after now: Date, by interval: TimeInterval) -> Date {
+        var next = date
+        while next <= now {
+            next = next.addingTimeInterval(interval)
+        }
+        return next
+    }
 }
 
 struct UsageBreakdown: Identifiable, Codable, Hashable, Sendable {
@@ -151,6 +201,26 @@ struct UsageSnapshot: Identifiable, Codable, Hashable, Sendable {
             tier: tier,
             breakdown: breakdown,
             isStale: stale
+        )
+    }
+
+    func resettingExpiredWindows(
+        now: Date,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> UsageSnapshot {
+        let updatedWindows = windows.map { $0.resettingIfNeeded(now: now, calendar: calendar) }
+        guard updatedWindows != windows else {
+            return self
+        }
+
+        return UsageSnapshot(
+            id: id,
+            accountId: accountId,
+            timestamp: timestamp,
+            windows: updatedWindows,
+            tier: tier,
+            breakdown: breakdown,
+            isStale: isStale
         )
     }
 }

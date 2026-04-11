@@ -50,4 +50,23 @@ final class CodexSessionSnapshotReaderTests: XCTestCase {
         XCTAssertEqual(windows.first(where: { $0.windowType == .rolling5h })?.used ?? -1, 72, accuracy: 0.1)
         XCTAssertEqual(windows.first(where: { $0.windowType == .weekly })?.used ?? -1, 68, accuracy: 0.1)
     }
+
+    func testParsesFlattenedRateLimitShapeWithOffByOneWindowMinutes() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let sessionFile = tempDirectory.appendingPathComponent("flattened.jsonl")
+
+        try """
+        {"timestamp":"2026-04-11T02:51:23.820Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary_used_percent":41.0,"secondary_used_percent":68.0,"primary_to_secondary_ratio_percent":60.29,"primary_window_minutes":299,"secondary_window_minutes":10079}}}
+        """.write(to: sessionFile, atomically: true, encoding: .utf8)
+
+        let reader = CodexSessionSnapshotReader(rootDirectoryURL: tempDirectory)
+        let windows = try XCTUnwrap(reader.windows(for: .codex))
+
+        XCTAssertEqual(windows.first(where: { $0.windowType == .rolling5h })?.used ?? -1, 41, accuracy: 0.1)
+        XCTAssertEqual(windows.first(where: { $0.windowType == .weekly })?.used ?? -1, 68, accuracy: 0.1)
+    }
 }

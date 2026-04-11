@@ -227,16 +227,7 @@ enum CodexAppServerPayloadParser {
     }
 
     private static func windowType(for windowMinutes: Int?) -> WindowType {
-        switch windowMinutes {
-        case 300:
-            return .rolling5h
-        case 10_080:
-            return .weekly
-        case 1_440:
-            return .daily
-        default:
-            return .monthly
-        }
+        ProviderSupport.consumerWindowType(for: windowMinutes)
     }
 
     private static func unixDate(_ value: Any?) -> Date? {
@@ -749,9 +740,7 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
                 continue
             }
 
-            let windows = ["primary", "secondary", "tertiary"].compactMap { key in
-                makeWindow(from: rateLimits[key] as? [String: Any])
-            }
+            let windows = windows(from: rateLimits)
 
             if !windows.isEmpty {
                 let timestamp = ProviderSupport.isoDate(object["timestamp"]) ?? fallbackTimestamp
@@ -762,6 +751,23 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
         }
 
         return latest
+    }
+
+    private func windows(from rateLimits: [String: Any]) -> [UsageWindow] {
+        let nestedWindows = ["primary", "secondary", "tertiary"].compactMap { key in
+            makeWindow(from: rateLimits[key] as? [String: Any])
+        }
+        if !nestedWindows.isEmpty {
+            return nestedWindows
+        }
+
+        let flattenedWindows = [
+            makeFlattenedWindow(prefix: "primary", from: rateLimits),
+            makeFlattenedWindow(prefix: "secondary", from: rateLimits),
+            makeFlattenedWindow(prefix: "tertiary", from: rateLimits)
+        ].compactMap { $0 }
+
+        return flattenedWindows
     }
 
     private func makeWindow(from limit: [String: Any]?) -> UsageWindow? {
@@ -785,17 +791,26 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
         )
     }
 
-    private func windowType(for windowMinutes: Int?) -> WindowType {
-        switch windowMinutes {
-        case 300:
-            return .rolling5h
-        case 10_080:
-            return .weekly
-        case 1_440:
-            return .daily
-        default:
-            return .monthly
+    private func makeFlattenedWindow(prefix: String, from rateLimits: [String: Any]) -> UsageWindow? {
+        guard let usedPercent = ProviderSupport.double(rateLimits["\(prefix)_used_percent"]) else {
+            return nil
         }
+
+        let resetDate = unixDate(rateLimits["\(prefix)_resets_at"])
+        let windowMinutes = ProviderSupport.int(rateLimits["\(prefix)_window_minutes"])
+
+        return UsageWindow(
+            windowType: windowType(for: windowMinutes),
+            used: min(max(usedPercent, 0), 100),
+            limit: 100,
+            unit: .percent,
+            resetDate: resetDate,
+            label: nil
+        )
+    }
+
+    private func windowType(for windowMinutes: Int?) -> WindowType {
+        ProviderSupport.consumerWindowType(for: windowMinutes)
     }
 
     private func unixDate(_ value: Any?) -> Date? {
@@ -856,16 +871,7 @@ struct CodexBarWidgetSnapshotReader: ConsumerUsageSnapshotReading {
     }
 
     private func windowType(for windowMinutes: Int?) -> WindowType {
-        switch windowMinutes {
-        case 300:
-            return .rolling5h
-        case 10_080:
-            return .weekly
-        case 1_440:
-            return .daily
-        default:
-            return .monthly
-        }
+        ProviderSupport.consumerWindowType(for: windowMinutes)
     }
 }
 
@@ -899,6 +905,23 @@ enum ServiceProviderError: LocalizedError, Equatable, Sendable {
 }
 
 enum ProviderSupport {
+    static func consumerWindowType(for windowMinutes: Int?) -> WindowType {
+        guard let windowMinutes else {
+            return .monthly
+        }
+
+        switch windowMinutes {
+        case 295...305:
+            return .rolling5h
+        case 1_435...1_445:
+            return .daily
+        case 10_075...10_085:
+            return .weekly
+        default:
+            return .monthly
+        }
+    }
+
     static func performJSONRequest(
         session: NetworkSession,
         request: URLRequest

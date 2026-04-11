@@ -425,6 +425,90 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(engine.accountStates[account.id]?.snapshot?.isStale, true)
         XCTAssertEqual(engine.accountStates[account.id]?.errorMessage, "Claude live usage is temporarily rate-limited.")
     }
+
+    func testStartupResetsExpiredCachedInactiveConsumerSnapshot() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let cacheURL = tempDirectory.appendingPathComponent("usage-snapshots.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+        let snapshotCache = UsageSnapshotCache(storageURL: cacheURL)
+
+        let activeAccount = Account(
+            name: "active@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-active",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "active@example.com"
+            ]
+        )
+        let inactiveAccount = Account(
+            name: "inactive@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-inactive",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "inactive@example.com"
+            ]
+        )
+        try accountStore.add(activeAccount)
+        try accountStore.add(inactiveAccount)
+        try accountStore.setActiveConsumer(activeAccount.id, for: .gemini)
+
+        let expiredResetDate = Date(timeIntervalSince1970: 1_710_000_000)
+        let cachedSnapshot = UsageSnapshot(
+            accountId: inactiveAccount.id,
+            timestamp: Date(timeIntervalSince1970: 1_709_999_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 7, limit: 10, unit: .requests, resetDate: expiredResetDate, label: "PRO")
+            ],
+            tier: "Gemini Code Assist"
+        )
+        try snapshotCache.save(snapshot: cachedSnapshot)
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            snapshotCache: snapshotCache,
+            providers: [:],
+            sleep: { _ in }
+        )
+
+        let normalizedWindow = try XCTUnwrap(engine.accountStates[inactiveAccount.id]?.snapshot?.windows.first)
+        XCTAssertEqual(normalizedWindow.used, 0, accuracy: 0.1)
+        XCTAssertNotNil(normalizedWindow.resetDate)
+        XCTAssertGreaterThan(normalizedWindow.resetDate ?? .distantPast, Date())
+
+        let persistedWindow = try XCTUnwrap(try snapshotCache.load()[inactiveAccount.id]?.windows.first)
+        XCTAssertEqual(persistedWindow.used, 0, accuracy: 0.1)
+        XCTAssertNotNil(persistedWindow.resetDate)
+        XCTAssertGreaterThan(persistedWindow.resetDate ?? .distantPast, Date())
+    }
+
+    func testSnapshotResettingExpiredWindowsAdvancesRollingWindowAcrossMultiplePeriods() {
+        let oldResetDate = Date(timeIntervalSince1970: 1_710_000_000)
+        let now = oldResetDate.addingTimeInterval((11 * 60 * 60) + 60)
+
+        let snapshot = UsageSnapshot(
+            accountId: UUID(),
+            timestamp: oldResetDate.addingTimeInterval(-300),
+            windows: [
+                UsageWindow(windowType: .rolling5h, used: 88, limit: 100, unit: .percent, resetDate: oldResetDate)
+            ],
+            tier: "Team"
+        )
+
+        let normalized = snapshot.resettingExpiredWindows(now: now)
+        let window = normalized.windows[0]
+
+        XCTAssertEqual(window.used, 0, accuracy: 0.1)
+        XCTAssertEqual(window.resetDate, oldResetDate.addingTimeInterval(15 * 60 * 60))
+    }
 }
 
 private struct MockConsumerIdentityProvider: ServiceProvider, ConsumerAccountDetecting {
