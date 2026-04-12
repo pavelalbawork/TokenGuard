@@ -194,6 +194,51 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertTrue(didUpdate)
     }
 
+    func testCodexClientRefreshesAccountOnBootstrap() async throws {
+        let lock = NSLock()
+        nonisolated(unsafe) var accountReadRefreshToken: Bool?
+
+        let session = MockCodexAppServerSession { line, session in
+            guard let data = line.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = payload["id"] as? Int else {
+                return
+            }
+
+            if id == 1 {
+                session.emit(.stdout(#"{"id":1,"result":{}}"#))
+            }
+
+            if id == 2 {
+                let params = payload["params"] as? [String: Any]
+                lock.lock()
+                accountReadRefreshToken = params?["refreshToken"] as? Bool
+                lock.unlock()
+                session.emit(.stdout("""
+{"id":2,"result":{"account":{"type":"chatgpt","email":"live@example.com","planType":"team"},"requiresOpenaiAuth":true}}
+"""))
+            }
+        }
+
+        let client = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory { session },
+            sleep: { _ in },
+            reconnectBackoff: [0]
+        )
+
+        await client.start()
+
+        let didReadAccount = await waitUntil {
+            lock.lock()
+            defer { lock.unlock() }
+            return accountReadRefreshToken != nil
+        }
+
+        XCTAssertTrue(didReadAccount)
+        XCTAssertEqual(accountReadRefreshToken, true)
+        await client.stop()
+    }
+
     func testCodexClientReportsSessionLaunchFailureWithoutCrashing() async throws {
         let client = CodexAppServerClient(
             sessionFactory: MockCodexAppServerSessionFactory {

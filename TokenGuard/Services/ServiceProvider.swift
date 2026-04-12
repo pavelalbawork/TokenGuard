@@ -522,7 +522,7 @@ actor CodexAppServerClient: CodexLiveStateProviding {
             "id": 2,
             "method": "account/read",
             "params": [
-                "refreshToken": false
+                "refreshToken": true
             ]
         ]))
 
