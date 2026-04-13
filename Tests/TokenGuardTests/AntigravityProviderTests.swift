@@ -17,7 +17,12 @@ final class AntigravityProviderTests: XCTestCase {
     // MARK: - Helpers
 
     /// Creates a minimal state.vscdb with an antigravityAuthStatus entry.
-    private func makeStateDb(in directory: URL, apiKey: String) throws -> URL {
+    private func makeStateDb(
+        in directory: URL,
+        apiKey: String,
+        email: String = "test@example.com",
+        name: String = "Test"
+    ) throws -> URL {
         let dbURL = directory.appendingPathComponent("state.vscdb")
         var db: OpaquePointer?
         guard sqlite3_open(dbURL.path, &db) == SQLITE_OK else {
@@ -29,11 +34,21 @@ final class AntigravityProviderTests: XCTestCase {
         let createSQL = "CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)"
         sqlite3_exec(db, createSQL, nil, nil, nil)
 
-        let json = #"{"name":"Test","email":"test@example.com","apiKey":"\#(apiKey)"}"#
+        let json = #"{"name":"\#(name)","email":"\#(email)","apiKey":"\#(apiKey)"}"#
         let insertSQL = "INSERT INTO ItemTable (key, value) VALUES ('antigravityAuthStatus', '\(json)')"
         sqlite3_exec(db, insertSQL, nil, nil, nil)
 
         return dbURL
+    }
+
+    private func executeSQL(_ sql: String, on db: OpaquePointer?) throws {
+        var errorMessage: UnsafeMutablePointer<CChar>?
+        let result = sqlite3_exec(db, sql, nil, nil, &errorMessage)
+        defer { sqlite3_free(errorMessage) }
+        guard result == SQLITE_OK else {
+            let message = errorMessage.map { String(cString: $0) } ?? "unknown SQLite error"
+            throw NSError(domain: "sqlite", code: Int(result), userInfo: [NSLocalizedDescriptionKey: message])
+        }
     }
 
     /// Builds a URL that points to nothing (no file).
@@ -350,6 +365,43 @@ final class AntigravityProviderTests: XCTestCase {
         let identity = try await provider.currentConsumerIdentity()
 
         XCTAssertEqual(identity?.email, "test@example.com")
+        XCTAssertNil(identity?.externalID)
+    }
+
+    func testCurrentConsumerIdentityReadsLatestWalAuthStatusAfterAccountSwitch() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeStateDb(
+            in: tempDir,
+            apiKey: "ya29.old",
+            email: "old@example.com",
+            name: "Old"
+        )
+
+        var db: OpaquePointer?
+        guard sqlite3_open(stateDbURL.path, &db) == SQLITE_OK else {
+            XCTFail("Could not reopen temp SQLite database")
+            return
+        }
+        defer { sqlite3_close(db) }
+
+        try executeSQL("PRAGMA journal_mode=WAL", on: db)
+        try executeSQL("PRAGMA wal_autocheckpoint=0", on: db)
+        try executeSQL("PRAGMA wal_checkpoint(FULL)", on: db)
+
+        let switchedAuthStatus = #"{"name":"New","email":"new@example.com","apiKey":"ya29.new"}"#
+        try executeSQL(
+            "UPDATE ItemTable SET value = '\(switchedAuthStatus)' WHERE key = 'antigravityAuthStatus'",
+            on: db
+        )
+
+        let provider = AntigravityProvider(stateDbURL: stateDbURL)
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "new@example.com")
         XCTAssertNil(identity?.externalID)
     }
 }

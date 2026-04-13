@@ -152,19 +152,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     private func readAuthStateFromStateDb() throws -> AntigravityAuthState {
-        var db: OpaquePointer?
-
-        // Use the immutable URI mode so we can read the database while Antigravity has
-        // it open in WAL mode. Spaces in the path must be percent-encoded for URI mode.
-        let encoded = stateDbURL.path
-            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? stateDbURL.path
-        let uri = "file:\(encoded)?immutable=1"
-
-        guard sqlite3_open_v2(uri, &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK else {
-            throw ServiceProviderError.unavailable(
-                "Could not open Antigravity editor database at \(stateDbURL.path)."
-            )
-        }
+        let db = try openStateDatabase()
         defer { sqlite3_close(db) }
 
         var stmt: OpaquePointer?
@@ -220,6 +208,45 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         }
 
         return fallbackAuthState
+    }
+
+    private func openStateDatabase() throws -> OpaquePointer? {
+        var errors: [String] = []
+
+        // Prefer a normal read-only open so committed WAL changes are visible
+        // immediately after Antigravity switches accounts. Immutable mode can read
+        // stale main-db pages when recent auth state is still in the WAL file.
+        for attempt in [
+            (label: "read-only", query: "mode=ro"),
+            (label: "immutable", query: "immutable=1")
+        ] {
+            var db: OpaquePointer?
+            let result = sqlite3_open_v2(
+                stateDbURI(query: attempt.query),
+                &db,
+                SQLITE_OPEN_READONLY | SQLITE_OPEN_URI,
+                nil
+            )
+
+            if result == SQLITE_OK {
+                sqlite3_busy_timeout(db, 1_000)
+                return db
+            }
+
+            let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown SQLite error"
+            errors.append("\(attempt.label): \(message)")
+            sqlite3_close(db)
+        }
+
+        throw ServiceProviderError.unavailable(
+            "Could not open Antigravity editor database at \(stateDbURL.path). \(errors.joined(separator: "; "))"
+        )
+    }
+
+    private func stateDbURI(query: String) -> String {
+        let encoded = stateDbURL.path
+            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? stateDbURL.path
+        return "file:\(encoded)?\(query)"
     }
 
     private func normalizedIdentity(_ value: String?) -> String? {
