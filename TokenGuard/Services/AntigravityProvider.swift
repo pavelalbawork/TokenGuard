@@ -155,6 +155,20 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         let db = try openStateDatabase()
         defer { sqlite3_close(db) }
 
+        // Primary path: unified OAuth protobuf (present in all recent Antigravity versions).
+        if let unifiedState = try? readUnifiedOAuthState(from: db),
+           !unifiedState.accessToken.isEmpty {
+            let email = readEmailFromUserStatus(db: db)
+            let name = readNameFromUserStatus(db: db)
+            return AntigravityAuthState(
+                accessToken: unifiedState.accessToken,
+                refreshToken: unifiedState.refreshToken,
+                email: email,
+                name: name
+            )
+        }
+
+        // Legacy fallback: antigravityAuthStatus JSON key (older Antigravity versions).
         var stmt: OpaquePointer?
         let sql = "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus'"
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
@@ -184,30 +198,66 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             ?? ProviderSupport.string(root["accessToken"])
             ?? ProviderSupport.string(root["token"])
 
-        let fallbackAuthState = AntigravityAuthState(
-            accessToken: apiKey ?? "",
-            refreshToken: nil,
-            email: ProviderSupport.string(root["email"]),
-            name: ProviderSupport.string(root["name"])
-        )
-
-        if let unifiedState = try? readUnifiedOAuthState(from: db),
-           !unifiedState.accessToken.isEmpty {
-            return AntigravityAuthState(
-                accessToken: unifiedState.accessToken,
-                refreshToken: unifiedState.refreshToken,
-                email: fallbackAuthState.email,
-                name: fallbackAuthState.name
-            )
-        }
-
         guard let apiKey, !apiKey.isEmpty else {
             throw ServiceProviderError.unavailable(
                 "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
             )
         }
 
-        return fallbackAuthState
+        return AntigravityAuthState(
+            accessToken: apiKey,
+            refreshToken: nil,
+            email: ProviderSupport.string(root["email"]),
+            name: ProviderSupport.string(root["name"])
+        )
+    }
+
+    /// Reads the signed-in user's email from `antigravityUnifiedStateSync.userStatus` (protobuf).
+    /// The userStatus proto embeds a base64-encoded inner payload; the email lives as a plain
+    /// UTF-8 string that is extractable via a simple ASCII scan of the decoded bytes.
+    private func readEmailFromUserStatus(db: OpaquePointer?) -> String? {
+        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
+              let outer = Data(base64Encoded: raw),
+              // field 2 of the outer proto holds the inner base64 payload
+              let innerB64Data = protobufField(2, in: outer),
+              let innerB64 = String(data: innerB64Data, encoding: .utf8),
+              let innerData = Data(base64Encoded: innerB64)
+        else { return nil }
+        // Email appears as a plain readable string inside the decoded payload.
+        let text = String(bytes: innerData, encoding: .utf8)
+            ?? String(innerData.map { ($0 >= 32 && $0 < 127) ? Character(UnicodeScalar($0)) : "." })
+        // Extract first email-shaped token.
+        let pattern = "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}"
+        if let range = text.range(of: pattern, options: .regularExpression) {
+            return String(text[range]).lowercased()
+        }
+        return nil
+    }
+
+    /// Reads the signed-in user's display name from `antigravityUnifiedStateSync.userStatus`.
+    private func readNameFromUserStatus(db: OpaquePointer?) -> String? {
+        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
+              let outer = Data(base64Encoded: raw),
+              let innerB64Data = protobufField(2, in: outer),
+              let innerB64 = String(data: innerB64Data, encoding: .utf8),
+              let innerData = Data(base64Encoded: innerB64)
+        else { return nil }
+        // field 1 of the inner proto contains the display name as a length-delimited string.
+        guard let nameData = protobufField(1, in: innerData),
+              let name = String(data: nameData, encoding: .utf8),
+              !name.isEmpty
+        else { return nil }
+        return name
+    }
+
+    /// Generic helper to fetch a single text value from ItemTable by key.
+    private func readItemTableValue(db: OpaquePointer?, key: String) -> String? {
+        var stmt: OpaquePointer?
+        let sql = "SELECT value FROM ItemTable WHERE key = '\(key)'"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW, let ptr = sqlite3_column_text(stmt, 0) else { return nil }
+        return String(cString: ptr)
     }
 
     private func openStateDatabase() throws -> OpaquePointer? {
