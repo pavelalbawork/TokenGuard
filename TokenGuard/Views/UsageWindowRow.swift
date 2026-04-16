@@ -12,7 +12,7 @@ struct UsageWindowRow: View {
             HStack(alignment: .bottom) {
                 Text(window.label ?? window.windowType.defaultLabel)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.88 : 0.82))
+                    .foregroundStyle(theme.id == "luminous" ? theme.textPrimary : theme.textSecondary.opacity(theme.isLight ? 0.88 : 1.0))
 
                 Spacer()
 
@@ -20,7 +20,7 @@ struct UsageWindowRow: View {
                     if let resetDate = window.resetDate {
                         CountdownTimerText(resetDate: resetDate)
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.7 : 0.52))
+                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.7 : 0.85))
                     }
                     
                     Text(valueText)

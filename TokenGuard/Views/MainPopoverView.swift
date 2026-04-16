@@ -162,7 +162,7 @@ struct MainPopoverView: View {
             HStack {
                 Text(appVersion)
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
-                    .foregroundStyle(theme.textSecondary.opacity(0.4))
+                    .foregroundStyle(theme.textSecondary.opacity(0.6))
 
                 Spacer()
 
@@ -172,17 +172,40 @@ struct MainPopoverView: View {
                     Text("QUIT")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(1.5)
-                        .foregroundStyle(theme.textSecondary.opacity(0.5))
+                        .foregroundStyle(theme.textSecondary.opacity(0.75))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Quit TokenGuard")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(theme.backgroundMain)
+            .background(theme.id == "luminous" ? Color.clear : theme.backgroundMain)
             .border(width: 1, edges: [.top], color: theme.border)
         }
-        .background(theme.backgroundMain)
+        .background(
+            ZStack {
+                theme.backgroundMain
+                if theme.id == "luminous" {
+                    GeometryReader { proxy in
+                        RadialGradient(
+                            colors: [theme.secondaryAccent.opacity(0.12), .clear],
+                            center: UnitPoint(x: -0.2, y: 0.5),
+                            startRadius: 0,
+                            endRadius: proxy.size.width * 1.5
+                        )
+                        .blur(radius: 60)
+                        
+                        RadialGradient(
+                            colors: [theme.primaryAccent.opacity(0.1), .clear],
+                            center: UnitPoint(x: 1.2, y: 0.5),
+                            startRadius: 0,
+                            endRadius: proxy.size.width * 1.5
+                        )
+                        .blur(radius: 60)
+                    }
+                }
+            }
+        )
         .ignoresSafeArea()
     }
     
@@ -208,7 +231,7 @@ struct MainPopoverView: View {
             Text(title)
                 .font(.system(size: 9, weight: .bold))
                 .tracking(1.5)
-                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.6))
+                .foregroundStyle(isSelected ? theme.textPrimary : theme.textSecondary.opacity(0.85))
                 .padding(.horizontal, 12)
                 .frame(height: 34)
                 .frame(minWidth: 80)
@@ -216,8 +239,22 @@ struct MainPopoverView: View {
                     ZStack {
                         if isSelected {
                             RoundedRectangle(cornerRadius: 7)
-                                .fill(theme.surfaceContainerHigh)
+                                .fill(theme.id == "luminous" ? theme.textPrimary.opacity(0.04) : theme.surfaceContainerHigh)
                                 .matchedGeometryEffect(id: "TabHighlight", in: animationNameSpace)
+                            
+                            if theme.id == "luminous" {
+                                RoundedRectangle(cornerRadius: 7)
+                                    .stroke(theme.textPrimary.opacity(0.1), lineWidth: 1)
+                                
+                                VStack {
+                                    Spacer()
+                                    Rectangle()
+                                        .fill(LinearGradient(colors: [theme.primaryAccent.opacity(0.7), theme.primaryAccent], startPoint: .leading, endPoint: .trailing))
+                                        .frame(width: 32, height: 2)
+                                        .clipShape(Capsule())
+                                        .padding(.bottom, 4)
+                                }
+                            }
                         }
                     }
                 )
@@ -641,13 +678,14 @@ struct UnifiedConcentricGauge: View {
                 
                 // Center Symbol
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .light))
+                    .font(.system(size: 24, weight: .regular))
                     .foregroundStyle(
-                        LinearGradient(colors: [baseColor, accentColor], startPoint: .bottomLeading, endPoint: .topTrailing)
+                        theme.id == "luminous"
+                        ? AnyShapeStyle(LinearGradient(colors: [theme.tertiaryAccent, theme.quaternaryAccent], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        : AnyShapeStyle(LinearGradient(colors: [baseColor, accentColor], startPoint: .bottomLeading, endPoint: .topTrailing))
                     )
-                    .shadow(color: accentColor.opacity(0.3), radius: 6, x: 0, y: 0)
+                    .shadow(color: theme.id == "luminous" ? theme.secondaryAccent.opacity(0.3) : accentColor.opacity(0.3), radius: 4, x: 0, y: 0)
                     .rotationEffect(.degrees(rotation))
-                    .opacity(0.9)
                 
                 // Inner Ring
                 if metrics.innerTerm != nil {
@@ -683,7 +721,7 @@ struct UnifiedConcentricGauge: View {
             VStack(spacing: 2) {
                 Text(title)
                     .font(.system(size: 11, weight: .black))
-                    .tracking(1.5)
+                    .tracking(2.0)
                     .foregroundStyle(theme.textPrimary)
                 
                 if let outer = metrics.outerTerm, let outerLbl = outerLabel {
@@ -691,10 +729,10 @@ struct UnifiedConcentricGauge: View {
                         Text("\(Int(max(0, 1.0 - outer) * 100))%")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(outerLbl)
-                            .font(.system(size: 9, weight: .bold))
-                            .tracking(1.0)
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(1.2)
                     }
-                    .foregroundStyle(accentColor)
+                    .foregroundStyle(theme.textPrimary)
                 }
                 if let middle = metrics.middleTerm, let middleLbl = middleLabel {
                     let color = accentColor.opacity(0.8)
@@ -702,10 +740,10 @@ struct UnifiedConcentricGauge: View {
                         Text("\(Int(max(0, 1.0 - middle) * 100))%")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(middleLbl)
-                            .font(.system(size: 9, weight: .bold))
-                            .tracking(1.0)
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(1.2)
                     }
-                    .foregroundStyle(color)
+                    .foregroundStyle(theme.textPrimary)
                 }
                 if let inner = metrics.innerTerm, let innerLbl = innerLabel {
                     let color = accentColor.opacity(0.6)
@@ -713,10 +751,10 @@ struct UnifiedConcentricGauge: View {
                         Text("\(Int(max(0, 1.0 - inner) * 100))%")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                         Text(innerLbl)
-                            .font(.system(size: 9, weight: .bold))
-                            .tracking(1.0)
+                            .font(.system(size: 9, weight: .semibold))
+                            .tracking(1.2)
                     }
-                    .foregroundStyle(color)
+                    .foregroundStyle(theme.textPrimary)
                 }
             }
         }

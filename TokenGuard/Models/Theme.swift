@@ -47,18 +47,19 @@ public struct Theme: Identifiable, Equatable, Sendable {
 extension Theme {
     public static let luminous = Theme(
         id: "luminous",
-        name: "Dark: Luminous",
-        backgroundMain: Color(hex: "#030c14"),
-        surface: Color(hex: "#030c14"),
-        surfaceContainer: Color(hex: "#0a192f"),
-        surfaceContainerHigh: Color(hex: "#112240"),
-        textPrimary: Color(hex: "#f1f5f9"),
-        textSecondary: Color(hex: "#94a3b8"),
-        primaryAccent: Color(hex: "#f97316"),
-        secondaryAccent: Color(hex: "#94a3b8"),
-        tertiaryAccent: Color(hex: "#f97316"),
-        border: Color(white: 1.0, opacity: 0.05),
-        error: Color(hex: "#ef4444")
+        name: "Dark: AIReady Luminous",
+        backgroundMain: Color(hex: "#0a0f1a"),
+        surface: Color(hex: "#0a0f1a"),
+        surfaceContainer: Color(hex: "#0d1220"),
+        surfaceContainerHigh: Color(hex: "#1a2133"),
+        textPrimary: Color(hex: "#ffffff"),
+        textSecondary: Color(hex: "#34d6ff"),   // AIReady Teal — replaces grey
+        primaryAccent: Color(hex: "#34d6ff"),
+        secondaryAccent: Color(hex: "#ff6b2c"),
+        tertiaryAccent: Color(hex: "#ff9a60"),
+        quaternaryAccent: Color(hex: "#d94010"),
+        border: Color(white: 1.0, opacity: 0.10),
+        error: Color(hex: "#ff4d4d")
     )
     
     public static let nordicFrost = Theme(

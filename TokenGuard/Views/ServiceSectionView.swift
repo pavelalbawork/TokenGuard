@@ -19,7 +19,7 @@ struct ServiceSectionView: View {
                     .font(.system(size: 14, weight: .light))
                     .symbolRenderingMode(.hierarchical)
                     .rotationEffect(.degrees(serviceType.rotationAngle))
-                    .foregroundStyle(serviceType.tintColor(for: theme))
+                    .foregroundStyle(theme.id == "luminous" ? theme.textPrimary : serviceType.tintColor(for: theme))
 
                 Text(serviceType.rawValue.capitalized)
                     .font(.system(size: 11, weight: .semibold))
@@ -49,7 +49,7 @@ struct ServiceSectionView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "person.crop.square.fill")
                                 .font(.system(size: 9, weight: .regular))
-                                .foregroundStyle(serviceType.tintColor(for: theme))
+                                .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : serviceType.tintColor(for: theme))
 
                             Text(account.displayName)
                                 .font(.system(size: 9, weight: .semibold))
@@ -84,7 +84,7 @@ struct ServiceSectionView: View {
         HStack(spacing: 4) {
             Image(systemName: "person.crop.square.fill")
                 .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(serviceType.tintColor(for: theme))
+                .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : serviceType.tintColor(for: theme))
 
             Text(account.displayName)
                 .font(.system(size: 9, weight: .semibold))
@@ -145,9 +145,9 @@ struct ServiceSectionView: View {
     private func statusColor(for status: AccountDisplayStatus, theme: Theme, serviceTint: Color) -> Color {
         switch status {
         case .live:
-            return serviceTint
+            return theme.id == "luminous" ? theme.primaryAccent : serviceTint
         case .stale, .reconnecting:
-            return theme.secondaryAccent
+            return theme.textSecondary
         case .error:
             return theme.error
         }

@@ -164,6 +164,12 @@ struct AnthropicProvider: ServiceProvider {
     }
 
     private func fetchClaudeConsumerUsage(account _: Account, timestamp: Date) async throws -> (windows: [UsageWindow], tier: String?) {
+        // Check CLI auth status first so we can surface a clear "not logged in" message
+        // rather than a cryptic Keychain error.
+        if let status = try? authStatusReader.readStatus(), !status.loggedIn {
+            throw ServiceProviderError.unavailable("claude-cli-not-logged-in")
+        }
+
         do {
             return try await fetchClaudeOAuthUsage(timestamp: timestamp)
         } catch let ServiceProviderError.unavailable(message) {

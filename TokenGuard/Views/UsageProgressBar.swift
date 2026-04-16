@@ -13,26 +13,27 @@ struct UsageProgressBar: View {
                     .fill(themeManager.currentTheme.surfaceContainerHigh)
                 
                 Capsule()
-                    .fill(color)
+                    .fill(shapeStyle)
                     // Show REMAINING: invert percentUsed so bar shrinks as usage grows
                     .frame(width: max(0, min(1, 1.0 - (window.percentUsed ?? 0))) * geometry.size.width)
-                    .shadow(color: color.opacity(0.6), radius: 4, x: 0, y: 0)
+                    .shadow(color: (serviceType?.tintColor(for: themeManager.currentTheme) ?? themeManager.currentTheme.tertiaryAccent).opacity(0.6), radius: 4, x: 0, y: 0)
             }
         }
         .frame(height: 8)
     }
 
-    private var color: Color {
+    private var shapeStyle: AnyShapeStyle {
         let theme = themeManager.currentTheme
+        let baseGradient = serviceType?.tintGradient(for: theme) ?? LinearGradient(colors: [theme.tertiaryAccent, theme.tertiaryAccent], startPoint: .leading, endPoint: .trailing)
         let baseColor = serviceType?.tintColor(for: theme) ?? theme.tertiaryAccent
         
         switch window.usageStatus {
         case .normal:
-            return baseColor
+            return theme.id == "luminous" ? AnyShapeStyle(baseGradient) : AnyShapeStyle(baseColor)
         case .warning:
-            return baseColor.opacity(0.8) // Keep provider color but tweak opacity, or use secondaryAccent if we strictly want orange warnings. Let's keep provider mapping distinct for pastel.
+            return theme.id == "luminous" ? AnyShapeStyle(baseGradient.opacity(0.8)) : AnyShapeStyle(baseColor.opacity(0.8))
         case .critical:
-            return theme.error
+            return AnyShapeStyle(theme.error)
         }
     }
 }

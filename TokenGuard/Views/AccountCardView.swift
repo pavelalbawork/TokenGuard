@@ -28,25 +28,37 @@ struct AccountCardView: View {
                     } else {
                         Text("Last updated \(ageString(for: snapshot.timestamp, now: referenceDate))")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.75 : 0.58))
+                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.75 : 1.0))
                     }
                 } else if let errorMessage = state?.errorMessage {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Label(antigravityAwareError(errorMessage), systemImage: "exclamationmark.circle")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(theme.error.opacity(0.9))
+                    if account.serviceType == .claude && errorMessage == "claude-cli-not-logged-in" {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Not logged in to Claude", systemImage: "person.crop.circle.badge.exclamationmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.secondaryAccent.opacity(0.9))
 
-                        if account.serviceType == .antigravity {
-                            Text("Uses the local Antigravity app state. Reopen Antigravity if authentication needs a refresh.")
+                            Text("Run `claude auth login` in Terminal to authenticate.")
                                 .font(.system(size: 9, weight: .medium))
-                                .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.78 : 0.62))
+                                .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.76 : 1.0))
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label(antigravityAwareError(errorMessage), systemImage: "exclamationmark.circle")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(theme.error.opacity(0.9))
+
+                            if account.serviceType == .antigravity {
+                                Text("Uses the local Antigravity app state. Reopen Antigravity if authentication needs a refresh.")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.76 : 1.0))
+                            }
                         }
                     }
                 } else if isInactiveConsumerAccount {
                     VStack(alignment: .leading, spacing: 6) {
                         Label("Inactive saved account", systemImage: "pause.circle")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.82 : 0.78))
+                            .foregroundStyle(theme.textSecondary.opacity(theme.isLight ? 0.82 : 1.0))
 
                         Text("Sign into this account in the local app or CLI to refresh it. The current live account is updated automatically.")
                             .font(.system(size: 9, weight: .medium))
@@ -158,13 +170,19 @@ struct CardHoverContainer<Content: View>: View {
                     isHovered = hovering
                 }
         } else {
+            let darkBackground = theme.id == "luminous"
+                ? (isHovered ? theme.surfaceContainerHigh.opacity(0.8) : theme.surfaceContainerHigh.opacity(0.4))
+                : theme.surfaceContainerHigh.opacity(isHovered ? 0.7 : 0.5)
+
             content
-                .background(background)
+                .background(darkBackground)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(isHovered ? theme.primaryAccent.opacity(0.25) : theme.border, lineWidth: 1)
+                        .stroke(isHovered 
+                                ? (theme.id == "luminous" ? theme.textPrimary.opacity(0.15) : theme.primaryAccent.opacity(0.25))
+                                : theme.border, lineWidth: 1)
                 )
                 .animation(.easeInOut(duration: 0.2), value: isHovered)
                 .onHover { hovering in

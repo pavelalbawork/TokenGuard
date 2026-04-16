@@ -27,6 +27,9 @@ extension ServiceType {
             case .gemini: return theme.tertiaryAccent
             case .antigravity: return theme.quaternaryAccent
             }
+        } else if theme.id == "luminous" {
+            // Unified AIReady aesthetic: all providers use Orange as the main tracker color
+            return theme.secondaryAccent
         } else {
             switch self {
             case .claude: return theme.primaryAccent
@@ -35,6 +38,15 @@ extension ServiceType {
             case .antigravity: return theme.primaryAccent
             }
         }
+    }
+
+    func tintGradient(for theme: Theme) -> LinearGradient {
+        if theme.id == "luminous" {
+            // Unified AIReady aesthetic: main bar color is the Orange Gradient
+            return LinearGradient(colors: [theme.tertiaryAccent, theme.quaternaryAccent], startPoint: .leading, endPoint: .trailing)
+        }
+        let color = tintColor(for: theme)
+        return LinearGradient(colors: [color, color], startPoint: .leading, endPoint: .trailing)
     }
 
     var rotationAngle: Double {
