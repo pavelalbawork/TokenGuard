@@ -277,7 +277,7 @@ final class UsagePollingEngine {
             by: \.serviceType
         )
 
-        for (serviceType, accounts) in consumerAccountsByService where accounts.count > 1 {
+        for (serviceType, accounts) in consumerAccountsByService {
             if !force, shouldSkipIdentitySync(for: serviceType) {
                 continue
             }
@@ -499,8 +499,7 @@ final class UsagePollingEngine {
         }
 
         if identitiesConflict(localIdentity, liveState.identity) {
-            if codexAccounts.count > 1,
-               let localIdentity,
+            if let localIdentity,
                let matchedAccount = matchingConsumerAccount(for: localIdentity, in: codexAccounts) {
                 activateCodexConsumerAccount(matchedAccount, identity: localIdentity)
             }
@@ -510,8 +509,7 @@ final class UsagePollingEngine {
 
         let effectiveIdentity = localIdentity ?? liveState.identity
 
-        if codexAccounts.count > 1,
-           let identity = effectiveIdentity,
+        if let identity = effectiveIdentity,
            let matchedAccount = matchingConsumerAccount(for: identity, in: codexAccounts) {
             activateCodexConsumerAccount(matchedAccount, identity: identity)
         }
@@ -544,6 +542,16 @@ final class UsagePollingEngine {
             } catch {
                 recordBackgroundError("Could not save Codex live snapshot", error)
             }
+        } else if let fallbackSnapshot = await codexFallbackSnapshot(for: activeAccount) {
+            state.snapshot = fallbackSnapshot.markingStale(liveState.status != .live)
+            state.lastSuccessAt = fallbackSnapshot.timestamp
+            state.errorMessage = liveState.status == .error ? liveState.lastErrorText : nil
+            do {
+                try snapshotCache.save(snapshot: fallbackSnapshot)
+                backgroundErrorMessage = nil
+            } catch {
+                recordBackgroundError("Could not save Codex fallback snapshot", error)
+            }
         } else if let existingSnapshot = state.snapshot {
             state.snapshot = existingSnapshot.markingStale(liveState.status != .live)
             if liveState.status == .error {
@@ -557,6 +565,22 @@ final class UsagePollingEngine {
 
         updatedStates[activeAccountID] = state
         accountStates = updatedStates
+    }
+
+    private func codexFallbackSnapshot(for account: Account) async -> UsageSnapshot? {
+        guard let provider = providers[.codex] else {
+            return nil
+        }
+
+        do {
+            let credential = try Self.pollingCredential(
+                for: account,
+                keychainManager: keychainManager
+            )
+            return try await provider.fetchUsage(account: account, credential: credential)
+        } catch {
+            return nil
+        }
     }
 
     private func activateCodexConsumerAccount(_ matchedAccount: Account, identity: ConsumerAccountIdentity) {

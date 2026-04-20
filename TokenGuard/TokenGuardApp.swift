@@ -9,6 +9,14 @@ struct TokenGuardApp: App {
     @State private var themeManager = ThemeManager.shared
 
     init() {
+        // Register UserDefaults fallbacks so the polling engine always sees a valid value,
+        // even on a fresh install before the user has touched the Settings picker.
+        // (AppStorage sets a SwiftUI-side default but does NOT write to UserDefaults,
+        // so object(forKey:) would otherwise return nil and bypass the global interval.)
+        UserDefaults.standard.register(defaults: [
+            "globalRefreshIntervalMins": 15
+        ])
+
         let store = AccountStore()
         let keychain = KeychainManager()
         _accountStore = State(initialValue: store)

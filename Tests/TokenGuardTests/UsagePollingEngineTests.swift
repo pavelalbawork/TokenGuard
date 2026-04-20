@@ -2,6 +2,15 @@ import Foundation
 import XCTest
 @testable import TokenGuard
 
+private struct SnapshotOnlyCodexReader: ConsumerUsageSnapshotReading {
+    let windows: [UsageWindow]?
+
+    func windows(for serviceType: ServiceType) throws -> [UsageWindow]? {
+        guard serviceType == .codex else { return nil }
+        return windows
+    }
+}
+
 @MainActor
 final class UsagePollingEngineTests: XCTestCase {
     func testRefreshAllSwitchesActiveGeminiConsumerToCurrentIdentity() async throws {
@@ -342,6 +351,77 @@ final class UsagePollingEngineTests: XCTestCase {
         )
 
         XCTAssertEqual(engine.pollCadence, 300)
+    }
+
+    func testCodexLiveErrorFallsBackToSessionSnapshot() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "codex@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "codex@example.com"
+            ]
+        )
+        try accountStore.add(account)
+
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory {
+                throw ServiceProviderError.unavailable("codex app-server missing")
+            },
+            sleep: { interval in
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            },
+            reconnectBackoff: [0, 60]
+        )
+
+        let provider = OpenAIProvider(
+            codexLiveStateProvider: codexClient,
+            snapshotReader: SnapshotOnlyCodexReader(
+                windows: [
+                    UsageWindow(
+                        windowType: .rolling5h,
+                        used: 61,
+                        limit: 100,
+                        unit: .percent,
+                        resetDate: nil
+                    )
+                ]
+            ),
+            cliParser: nil,
+            identityReader: CodexAuthIdentityReader(
+                authURL: tempDirectory.appendingPathComponent("missing-auth.json")
+            ),
+            now: { Date(timeIntervalSince1970: 1_775_000_000) }
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            codexClient: codexClient,
+            providers: [.codex: provider],
+            serviceRefreshIntervals: [.codex: 300],
+            sleep: { _ in }
+        )
+
+        engine.start()
+
+        let didFallback = await waitUntil {
+            engine.accountStates[account.id]?.snapshot?.windows.first?.used == 61 &&
+            engine.accountStates[account.id]?.errorMessage == "codex app-server missing"
+        }
+
+        XCTAssertTrue(didFallback)
+        XCTAssertEqual(engine.accountStates[account.id]?.connectionStatus, .error)
     }
 
     func testGlobalRefreshIntervalControlsPollableProviderCadence() async throws {

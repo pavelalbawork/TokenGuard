@@ -154,6 +154,50 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertEqual(identity?.externalID, "acct-local")
     }
 
+    func testConsumerUsageFallsBackToSessionSnapshotWhenAppServerErrors() async throws {
+        let snapshotWindows = [
+            UsageWindow(
+                windowType: .rolling5h,
+                used: 61,
+                limit: 100,
+                unit: .percent,
+                resetDate: nil
+            )
+        ]
+
+        let provider = OpenAIProvider(
+            codexLiveStateProvider: MockCodexLiveStateProvider(
+                state: CodexLiveState(
+                    snapshot: nil,
+                    identity: ConsumerAccountIdentity(email: "live@example.com", externalID: nil),
+                    status: .error,
+                    lastUpdateAt: nil,
+                    lastErrorText: "codex app-server missing"
+                )
+            ),
+            snapshotReader: MockConsumerSnapshotReader(windowsToReturn: snapshotWindows),
+            cliParser: nil,
+            identityReader: CodexAuthIdentityReader(
+                authURL: URL(fileURLWithPath: "/tmp/nonexistent-codex-auth.json")
+            ),
+            now: { Date(timeIntervalSince1970: 1_775_000_000) }
+        )
+
+        let account = Account(
+            name: "codex@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-test",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer"
+            ]
+        )
+
+        let snapshot = try await provider.fetchUsage(account: account, credential: "")
+
+        XCTAssertEqual(snapshot.windows.count, 1)
+        XCTAssertEqual(snapshot.windows.first?.used ?? -1, 61, accuracy: 0.1)
+    }
+
     func testCodexClientParsesBootstrapAndLaterRateLimitUpdate() async throws {
         let session = makeBootstrapCodexSession(
             email: "live@example.com",

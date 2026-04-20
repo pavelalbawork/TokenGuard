@@ -181,6 +181,8 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     private func consumerSnapshot(for account: Account, timestamp: Date) async throws -> CodexConsumerSnapshot {
+        var liveStateError: Error?
+
         if let liveState = await codexLiveStateProvider?.currentState() {
             if let liveSnapshot = liveState.snapshot, !liveSnapshot.windows.isEmpty {
                 return liveSnapshot
@@ -188,7 +190,7 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
 
             if let lastErrorText = liveState.lastErrorText,
                liveState.status == .error {
-                throw ServiceProviderError.unavailable(lastErrorText)
+                liveStateError = ServiceProviderError.unavailable(lastErrorText)
             }
         }
 
@@ -201,6 +203,10 @@ struct OpenAIProvider: ServiceProvider, ConsumerAccountDetecting {
 
         if let cliParser, let windows = try? await cliParser.parseUsageOutput(), !windows.isEmpty {
             return CodexConsumerSnapshot(windows: windows, identity: nil, tier: nil)
+        }
+
+        if let liveStateError {
+            throw liveStateError
         }
 
         _ = account
