@@ -62,7 +62,56 @@ private func requestBodyData(from request: URLRequest) -> Data? {
     return data.isEmpty ? nil : data
 }
 
+private struct MockClaudeAuthStatusReader: ClaudeAuthStatusReading {
+    let status: ClaudeCLIAuthStatus
+
+    func readStatus() throws -> ClaudeCLIAuthStatus {
+        status
+    }
+}
+
 final class AnthropicProviderTests: XCTestCase {
+    func testCurrentConsumerIdentityUsesClaudeAuthStatusEmail() async throws {
+        let provider = AnthropicProvider(
+            session: makeMockedSession(),
+            authStatusReader: MockClaudeAuthStatusReader(
+                status: ClaudeCLIAuthStatus(
+                    loggedIn: true,
+                    email: " Claude.User@Example.COM ",
+                    subscriptionType: "pro"
+                )
+            ),
+            credentialLoader: {
+                throw ServiceProviderError.unavailable("unexpected credential load")
+            }
+        )
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "claude.user@example.com")
+        XCTAssertNil(identity?.externalID)
+    }
+
+    func testCurrentConsumerIdentityReturnsNilWhenClaudeIsLoggedOut() async throws {
+        let provider = AnthropicProvider(
+            session: makeMockedSession(),
+            authStatusReader: MockClaudeAuthStatusReader(
+                status: ClaudeCLIAuthStatus(
+                    loggedIn: false,
+                    email: "claude@example.com",
+                    subscriptionType: nil
+                )
+            ),
+            credentialLoader: {
+                throw ServiceProviderError.unavailable("unexpected credential load")
+            }
+        )
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertNil(identity)
+    }
+
     func testConsumerUsageUsesOAuthRemainingWindows() async throws {
         let apiURL = URL(string: "https://api.anthropic.com")!
         let session = makeMockedSession()

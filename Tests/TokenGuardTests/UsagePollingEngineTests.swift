@@ -100,6 +100,67 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
     }
 
+    func testRefreshAllSwitchesActiveClaudeConsumerToCurrentIdentity() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let firstAccount = Account(
+            name: "old@example.com",
+            serviceType: .claude,
+            credentialRef: "claude-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+        let secondAccount = Account(
+            name: "new@example.com",
+            serviceType: .claude,
+            credentialRef: "claude-2",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "new@example.com"
+            ]
+        )
+
+        try accountStore.add(firstAccount)
+        try accountStore.add(secondAccount)
+
+        let snapshot = UsageSnapshot(
+            accountId: secondAccount.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .rolling5h, used: 17, limit: 100, unit: .percent, resetDate: nil, label: "5h window")
+            ],
+            tier: "Pro"
+        )
+        let provider = MockConsumerIdentityProvider(
+            serviceType: .claude,
+            identity: ConsumerAccountIdentity(email: "new@example.com", externalID: nil),
+            snapshot: snapshot
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.claude: provider],
+            serviceRefreshIntervals: [.claude: 300],
+            sleep: { _ in }
+        )
+
+        await engine.refreshAll(force: true)
+
+        XCTAssertEqual(accountStore.activeConsumerAccountID(for: .claude), secondAccount.id)
+        XCTAssertEqual(engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used, 17)
+        XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
+    }
+
     func testRefreshAllSwitchesActiveCodexConsumerToLiveIdentity() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

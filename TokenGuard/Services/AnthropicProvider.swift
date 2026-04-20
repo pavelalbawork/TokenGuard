@@ -20,7 +20,7 @@ struct ClaudeOAuthCredential: Equatable, Sendable {
     }
 }
 
-struct AnthropicProvider: ServiceProvider {
+struct AnthropicProvider: ServiceProvider, ConsumerAccountDetecting {
     let serviceType: ServiceType = .claude
 
     private static let claudeOAuthService = "Claude Code-credentials"
@@ -163,6 +163,16 @@ struct AnthropicProvider: ServiceProvider {
         return true
     }
 
+    func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
+        let status = try authStatusReader.readStatus()
+        guard status.loggedIn,
+              let email = normalizedIdentity(status.email) else {
+            return nil
+        }
+
+        return ConsumerAccountIdentity(email: email, externalID: nil)
+    }
+
     private func fetchClaudeConsumerUsage(account _: Account, timestamp: Date) async throws -> (windows: [UsageWindow], tier: String?) {
         // Check CLI auth status first so we can surface a clear "not logged in" message
         // rather than a cryptic Keychain error.
@@ -287,6 +297,12 @@ struct AnthropicProvider: ServiceProvider {
             resetDate: ProviderSupport.isoDate(dictionary["resets_at"]),
             label: label
         )
+    }
+
+    private func normalizedIdentity(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func loadClaudeOAuthCredential() throws -> ClaudeOAuthCredential {
