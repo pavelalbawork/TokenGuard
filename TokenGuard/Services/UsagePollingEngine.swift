@@ -282,6 +282,7 @@ final class UsagePollingEngine {
                 continue
             }
             lastIdentitySyncAt[serviceType] = Date()
+            var restartedCodexSession = false
 
             let identity: ConsumerAccountIdentity?
             if serviceType == .codex {
@@ -295,6 +296,7 @@ final class UsagePollingEngine {
 
                 if identitiesConflict(localIdentity, liveIdentity) {
                     await codexClient.restart()
+                    restartedCodexSession = true
                 }
 
                 identity = localIdentity ?? liveIdentity
@@ -308,6 +310,15 @@ final class UsagePollingEngine {
             guard let identity else { continue }
 
             guard let matchedAccount = matchingConsumerAccount(for: identity, in: accounts) else {
+                continue
+            }
+
+            if serviceType == .codex {
+                let switchedAccounts = accountStore.activeConsumerAccountID(for: .codex) != matchedAccount.id
+                activateCodexConsumerAccount(matchedAccount, identity: identity)
+                if switchedAccounts && !restartedCodexSession {
+                    await codexClient.restart()
+                }
                 continue
             }
 

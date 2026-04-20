@@ -11,6 +11,32 @@ private struct SnapshotOnlyCodexReader: ConsumerUsageSnapshotReading {
     }
 }
 
+private func makeRateLimitOnlyCodexSession(
+    planType: String,
+    primaryUsedPercent: Int,
+    secondaryUsedPercent: Int
+) -> MockCodexAppServerSession {
+    MockCodexAppServerSession { line, session in
+        guard let data = line.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let id = payload["id"] as? Int else {
+            return
+        }
+
+        if id == 1 {
+            session.emit(.stdout("""
+{"id":1,"result":{"userAgent":"Codex Desktop","codexHome":"/Users/example/.codex","platformFamily":"unix","platformOs":"macos"}}
+"""))
+        }
+
+        if id == 3 {
+            session.emit(.stdout("""
+{"id":3,"result":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":\(primaryUsedPercent),"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":\(secondaryUsedPercent),"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"\(planType)"},"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,"primary":{"usedPercent":\(primaryUsedPercent),"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":\(secondaryUsedPercent),"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"\(planType)"}}}}
+"""))
+        }
+    }
+}
+
 @MainActor
 final class UsagePollingEngineTests: XCTestCase {
     func testRefreshAllSwitchesActiveGeminiConsumerToCurrentIdentity() async throws {
@@ -422,6 +448,109 @@ final class UsagePollingEngineTests: XCTestCase {
 
         XCTAssertTrue(didFallback)
         XCTAssertEqual(engine.accountStates[account.id]?.connectionStatus, .error)
+    }
+
+    func testRefreshAllRestartsCodexWhenLocalIdentitySwitchesBeforeLiveIdentityLoads() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let oldAccount = Account(
+            name: "old@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-old",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+        let newAccount = Account(
+            name: "new@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-new",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "new@example.com"
+            ]
+        )
+
+        try accountStore.add(oldAccount)
+        try accountStore.add(newAccount)
+
+        let lock = NSLock()
+        nonisolated(unsafe) var sessionNumber = 0
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory {
+                lock.lock()
+                sessionNumber += 1
+                let currentSessionNumber = sessionNumber
+                lock.unlock()
+
+                if currentSessionNumber == 1 {
+                    return makeRateLimitOnlyCodexSession(
+                        planType: "team",
+                        primaryUsedPercent: 12,
+                        secondaryUsedPercent: 34
+                    )
+                }
+
+                return makeBootstrapCodexSession(
+                    email: "new@example.com",
+                    planType: "team",
+                    primaryUsedPercent: 56,
+                    secondaryUsedPercent: 78
+                )
+            },
+            now: { Date(timeIntervalSince1970: 1_710_000_000) },
+            sleep: { _ in },
+            reconnectBackoff: [0]
+        )
+
+        let provider = MutableConsumerIdentityProvider(
+            serviceType: .codex,
+            identity: ConsumerAccountIdentity(email: "old@example.com", externalID: nil),
+            snapshot: UsageSnapshot(
+                accountId: oldAccount.id,
+                timestamp: Date(timeIntervalSince1970: 1_710_000_000),
+                windows: [],
+                tier: nil
+            )
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            codexClient: codexClient,
+            providers: [.codex: provider],
+            serviceRefreshIntervals: [.codex: 300],
+            sleep: { _ in }
+        )
+
+        engine.start()
+        let sawInitialSnapshot = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == oldAccount.id &&
+            engine.accountStates[oldAccount.id]?.snapshot?.windows.first?.used == 12
+        }
+
+        XCTAssertTrue(sawInitialSnapshot)
+
+        provider.identity = ConsumerAccountIdentity(email: "new@example.com", externalID: nil)
+
+        await engine.refreshAll(force: true)
+
+        let didSwitchToNewUsage = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == newAccount.id &&
+            engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used == 56
+        }
+
+        XCTAssertTrue(didSwitchToNewUsage)
+        XCTAssertEqual(accountStore.activeConsumerAccountID(for: .codex), newAccount.id)
+        XCTAssertEqual(engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used, 56)
     }
 
     func testGlobalRefreshIntervalControlsPollableProviderCadence() async throws {
