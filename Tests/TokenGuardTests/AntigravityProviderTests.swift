@@ -51,6 +51,70 @@ final class AntigravityProviderTests: XCTestCase {
         }
     }
 
+    private func protobufVarint(_ value: UInt64) -> Data {
+        var remaining = value
+        var data = Data()
+
+        while true {
+            if remaining < 0x80 {
+                data.append(UInt8(remaining))
+                return data
+            }
+
+            data.append(UInt8((remaining & 0x7F) | 0x80))
+            remaining >>= 7
+        }
+    }
+
+    private func protobufField(number: Int, payload: Data) -> Data {
+        var data = Data()
+        let tag = UInt64((number << 3) | 2)
+        data.append(protobufVarint(tag))
+        data.append(protobufVarint(UInt64(payload.count)))
+        data.append(payload)
+        return data
+    }
+
+    private func makeUnifiedStateDb(
+        in directory: URL,
+        accessToken: String,
+        refreshToken: String? = nil,
+        email: String,
+        name: String
+    ) throws -> URL {
+        let dbURL = directory.appendingPathComponent("state.vscdb")
+        var db: OpaquePointer?
+        guard sqlite3_open(dbURL.path, &db) == SQLITE_OK else {
+            XCTFail("Could not create temp SQLite database")
+            throw NSError(domain: "test", code: 0)
+        }
+        defer { sqlite3_close(db) }
+
+        try executeSQL("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)", on: db)
+
+        var oauthInfo = protobufField(number: 1, payload: Data(accessToken.utf8))
+        if let refreshToken {
+            oauthInfo.append(protobufField(number: 3, payload: Data(refreshToken.utf8)))
+        }
+        let oauthToken = protobufField(
+            number: 1,
+            payload: protobufField(
+                number: 2,
+                payload: protobufField(number: 1, payload: Data(Data(oauthInfo).base64EncodedString().utf8))
+            )
+        ).base64EncodedString()
+
+        let nestedProfile = Data("\(name):\u{0014}\(email)".utf8).base64EncodedString()
+        let userStatus = protobufField(number: 2, payload: Data(nestedProfile.utf8)).base64EncodedString()
+
+        let insertOAuthSQL = "INSERT INTO ItemTable (key, value) VALUES ('antigravityUnifiedStateSync.oauthToken', '\(oauthToken)')"
+        let insertUserStatusSQL = "INSERT INTO ItemTable (key, value) VALUES ('antigravityUnifiedStateSync.userStatus', '\(userStatus)')"
+        try executeSQL(insertOAuthSQL, on: db)
+        try executeSQL(insertUserStatusSQL, on: db)
+
+        return dbURL
+    }
+
     /// Builds a URL that points to nothing (no file).
     private func nonExistentURL() -> URL {
         URL(fileURLWithPath: "/tmp/\(UUID().uuidString)/does_not_exist")
@@ -402,6 +466,27 @@ final class AntigravityProviderTests: XCTestCase {
         let identity = try await provider.currentConsumerIdentity()
 
         XCTAssertEqual(identity?.email, "new@example.com")
+        XCTAssertNil(identity?.externalID)
+    }
+
+    func testCurrentConsumerIdentityReadsEmailFromNestedUnifiedUserStatus() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeUnifiedStateDb(
+            in: tempDir,
+            accessToken: "ya29.unified",
+            refreshToken: "refresh.unified",
+            email: "nested@example.com",
+            name: "Nested User"
+        )
+        let provider = AntigravityProvider(stateDbURL: stateDbURL)
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "nested@example.com")
         XCTAssertNil(identity?.externalID)
     }
 }

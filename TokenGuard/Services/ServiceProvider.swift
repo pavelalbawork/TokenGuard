@@ -732,17 +732,20 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
     }
 
     private let rootDirectoryURL: URL
+    private let authURL: URL
     private let now: @Sendable () -> Date
     private let cache: SnapshotReaderTTLCache
     private let cacheTTL: TimeInterval
 
     init(
         rootDirectoryURL: URL = URL(fileURLWithPath: NSString(string: "~/.codex/sessions").expandingTildeInPath),
+        authURL: URL = URL(fileURLWithPath: NSString(string: "~/.codex/auth.json").expandingTildeInPath),
         now: @escaping @Sendable () -> Date = Date.init,
         cache: SnapshotReaderTTLCache = SnapshotReaderTTLCache(),
         cacheTTL: TimeInterval = 30
     ) {
         self.rootDirectoryURL = rootDirectoryURL
+        self.authURL = authURL
         self.now = now
         self.cache = cache
         self.cacheTTL = cacheTTL
@@ -760,6 +763,7 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
         }
 
         let fileManager = FileManager.default
+        let authModifiedAt = authFileModificationDate(fileManager: fileManager)
 
         guard fileManager.fileExists(atPath: rootDirectoryURL.path) else {
             return nil
@@ -775,7 +779,9 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
             guard fileURL.pathExtension == "jsonl" else { continue }
             let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
             guard values.isRegularFile == true else { continue }
-            if let parsed = try? windows(from: fileURL, fallbackTimestamp: values.contentModificationDate ?? .distantPast) {
+            let fallbackTimestamp = values.contentModificationDate ?? .distantPast
+            if let parsed = try? windows(from: fileURL, fallbackTimestamp: fallbackTimestamp),
+               isEligible(parsed, fileModifiedAt: fallbackTimestamp, authModifiedAt: authModifiedAt) {
                 if latest == nil || parsed.timestamp > latest!.timestamp {
                     latest = parsed
                 }
@@ -818,6 +824,26 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
         }
 
         return latest
+    }
+
+    private func authFileModificationDate(fileManager: FileManager) -> Date? {
+        guard fileManager.fileExists(atPath: authURL.path) else {
+            return nil
+        }
+
+        return try? authURL.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
+    private func isEligible(
+        _ parsed: TimestampedWindows,
+        fileModifiedAt: Date,
+        authModifiedAt: Date?
+    ) -> Bool {
+        guard let authModifiedAt else {
+            return true
+        }
+
+        return max(parsed.timestamp, fileModifiedAt) >= authModifiedAt
     }
 
     private func windows(from rateLimits: [String: Any]) -> [UsageWindow] {

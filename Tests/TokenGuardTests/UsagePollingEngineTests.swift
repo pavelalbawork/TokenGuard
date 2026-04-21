@@ -161,6 +161,67 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
     }
 
+    func testRefreshAllSwitchesActiveAntigravityConsumerToCurrentIdentity() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let firstAccount = Account(
+            name: "work@example.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "work@example.com"
+            ]
+        )
+        let secondAccount = Account(
+            name: "personal@example.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-2",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "personal@example.com"
+            ]
+        )
+
+        try accountStore.add(firstAccount)
+        try accountStore.add(secondAccount)
+
+        let snapshot = UsageSnapshot(
+            accountId: secondAccount.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 12, limit: 100, unit: .percent, resetDate: nil, label: "Anthropic (Claude)")
+            ],
+            tier: "personal@example.com"
+        )
+        let provider = MockConsumerIdentityProvider(
+            serviceType: .antigravity,
+            identity: ConsumerAccountIdentity(email: "personal@example.com", externalID: nil),
+            snapshot: snapshot
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.antigravity: provider],
+            serviceRefreshIntervals: [.antigravity: 300],
+            sleep: { _ in }
+        )
+
+        await engine.refreshAll(force: true)
+
+        XCTAssertEqual(accountStore.activeConsumerAccountID(for: .antigravity), secondAccount.id)
+        XCTAssertEqual(engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used, 12)
+        XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
+    }
+
     func testRefreshAllSwitchesActiveCodexConsumerToLiveIdentity() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -717,12 +778,15 @@ final class UsagePollingEngineTests: XCTestCase {
         )
 
         engine.start()
-        let showedStaleUsageOnNewAccount = await waitUntil {
-            accountStore.activeConsumerAccountID(for: .codex) == newAccount.id &&
-            engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used == 12
+        let switchedToNewAccountWithoutApplyingStaleUsage = await waitUntil {
+            guard accountStore.activeConsumerAccountID(for: .codex) == newAccount.id else {
+                return false
+            }
+
+            return engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used != 12
         }
 
-        XCTAssertTrue(showedStaleUsageOnNewAccount)
+        XCTAssertTrue(switchedToNewAccountWithoutApplyingStaleUsage)
 
         await engine.refreshAll(force: true)
 

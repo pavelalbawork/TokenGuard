@@ -213,41 +213,55 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     /// Reads the signed-in user's email from `antigravityUnifiedStateSync.userStatus` (protobuf).
-    /// The userStatus proto embeds a base64-encoded inner payload; the email lives as a plain
-    /// UTF-8 string that is extractable via a simple ASCII scan of the decoded bytes.
+    /// Recent Antigravity builds nest the user profile inside multiple protobuf and base64 layers.
+    /// Walk those payloads recursively until an email-shaped token appears.
     private func readEmailFromUserStatus(db: OpaquePointer?) -> String? {
-        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
-              let outer = Data(base64Encoded: raw),
-              // field 2 of the outer proto holds the inner base64 payload
-              let innerB64Data = protobufField(2, in: outer),
-              let innerB64 = String(data: innerB64Data, encoding: .utf8),
-              let innerData = Data(base64Encoded: innerB64)
-        else { return nil }
-        // Email appears as a plain readable string inside the decoded payload.
-        let text = String(bytes: innerData, encoding: .utf8)
-            ?? String(innerData.map { ($0 >= 32 && $0 < 127) ? Character(UnicodeScalar($0)) : "." })
-        // Extract first email-shaped token.
         let pattern = "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}"
-        if let range = text.range(of: pattern, options: .regularExpression) {
-            return String(text[range]).lowercased()
+        for payload in decodedUserStatusPayloads(db: db) {
+            let text = String(decoding: payload, as: UTF8.self)
+            if let range = text.range(of: pattern, options: .regularExpression) {
+                return normalizedIdentity(String(text[range]))
+            }
         }
         return nil
     }
 
     /// Reads the signed-in user's display name from `antigravityUnifiedStateSync.userStatus`.
     private func readNameFromUserStatus(db: OpaquePointer?) -> String? {
-        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
-              let outer = Data(base64Encoded: raw),
-              let innerB64Data = protobufField(2, in: outer),
-              let innerB64 = String(data: innerB64Data, encoding: .utf8),
-              let innerData = Data(base64Encoded: innerB64)
-        else { return nil }
-        // field 1 of the inner proto contains the display name as a length-delimited string.
-        guard let nameData = protobufField(1, in: innerData),
-              let name = String(data: nameData, encoding: .utf8),
-              !name.isEmpty
-        else { return nil }
-        return name
+        let payloads = decodedUserStatusPayloads(db: db)
+        for payload in payloads {
+            if let nameData = protobufField(1, in: payload),
+               let name = String(data: nameData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+               !name.isEmpty {
+                return name
+            }
+        }
+
+        guard let email = readEmailFromUserStatus(db: db) else {
+            return nil
+        }
+
+        for payload in payloads {
+            let text = String(decoding: payload, as: UTF8.self)
+            guard let emailRange = text.range(of: email, options: [.caseInsensitive]) else {
+                continue
+            }
+
+            let prefix = text[..<emailRange.lowerBound]
+            let candidates = prefix
+                .components(separatedBy: CharacterSet.controlCharacters.union(.newlines))
+                .map {
+                    $0.trimmingCharacters(in: .punctuationCharacters.union(.whitespacesAndNewlines))
+                }
+                .filter { !$0.isEmpty }
+
+            if let candidate = candidates.last, candidate.contains(" ") {
+                return candidate
+            }
+        }
+
+        return nil
     }
 
     /// Generic helper to fetch a single text value from ItemTable by key.
@@ -446,6 +460,79 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             }
         }
         return nil
+    }
+
+    private func decodedUserStatusPayloads(db: OpaquePointer?) -> [Data] {
+        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
+              let outer = Data(base64Encoded: raw) else {
+            return []
+        }
+
+        var queue: [Data] = [outer]
+        var payloads: [Data] = []
+        var seen = Set<Data>()
+
+        while !queue.isEmpty {
+            let current = queue.removeFirst()
+            if seen.contains(current) {
+                continue
+            }
+            seen.insert(current)
+            payloads.append(current)
+
+            queue.append(contentsOf: protobufLengthDelimitedFields(in: current))
+
+            let text = String(decoding: current, as: UTF8.self)
+            for match in text.matches(of: /[A-Za-z0-9+\/=]{40,}/) {
+                guard let decoded = Data(base64Encoded: String(match.output)),
+                      !decoded.isEmpty,
+                      !seen.contains(decoded) else {
+                    continue
+                }
+                queue.append(decoded)
+            }
+        }
+
+        return payloads
+    }
+
+    private func protobufLengthDelimitedFields(in data: Data) -> [Data] {
+        var payloads: [Data] = []
+        var offset = 0
+
+        while offset < data.count {
+            guard let (tag, nextOffset) = readVarint(in: data, offset: offset) else {
+                return payloads
+            }
+            let wireType = Int(tag & 0b111)
+            offset = nextOffset
+
+            switch wireType {
+            case 0:
+                guard let (_, varintEnd) = readVarint(in: data, offset: offset) else {
+                    return payloads
+                }
+                offset = varintEnd
+            case 2:
+                guard let (length, payloadStart) = readVarint(in: data, offset: offset) else {
+                    return payloads
+                }
+                let payloadEnd = payloadStart + Int(length)
+                guard payloadEnd <= data.count else {
+                    return payloads
+                }
+                payloads.append(data.subdata(in: payloadStart..<payloadEnd))
+                offset = payloadEnd
+            case 1:
+                offset += 8
+            case 5:
+                offset += 4
+            default:
+                return payloads
+            }
+        }
+
+        return payloads
     }
 
     private func readVarint(in data: Data, offset: Int) -> (UInt64, Int)? {
