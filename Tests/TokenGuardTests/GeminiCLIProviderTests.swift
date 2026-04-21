@@ -12,6 +12,32 @@ private func geminiJsonData(_ body: Any) -> Data {
 }
 
 final class GeminiCLIProviderTests: XCTestCase {
+    func testOAuthLoopbackAuthorizationCodeValidatesStateAndPath() throws {
+        let request = """
+        GET /oauth2/callback?code=test-code&state=expected-state HTTP/1.1
+        Host: localhost:4242
+
+        """
+
+        let code = try OAuthLoopbackServer.authorizationCode(
+            from: request,
+            expectedPath: "/oauth2/callback",
+            expectedState: "expected-state"
+        )
+
+        XCTAssertEqual(code, "test-code")
+
+        XCTAssertThrowsError(
+            try OAuthLoopbackServer.authorizationCode(
+                from: request,
+                expectedPath: "/oauth2/callback",
+                expectedState: "wrong-state"
+            )
+        ) { error in
+            XCTAssertEqual(error as? OAuthLoopbackError, .invalidState)
+        }
+    }
+
     func testFetchUsageParsesIdentityAndQuotaBuckets() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

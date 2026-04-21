@@ -31,6 +31,7 @@ protocol GoogleOAuthManaging: Sendable {
 enum GoogleOAuthError: LocalizedError, Equatable, Sendable {
     case missingConfiguration(String)
     case invalidRedirect
+    case invalidState
     case invalidTokenResponse
     case unsupportedPlatform
 
@@ -40,6 +41,8 @@ enum GoogleOAuthError: LocalizedError, Equatable, Sendable {
             return message
         case .invalidRedirect:
             return "The Google OAuth redirect did not contain an authorization code."
+        case .invalidState:
+            return "The Google OAuth redirect did not match the active sign-in request."
         case .invalidTokenResponse:
             return "The Google OAuth token response was invalid."
         case .unsupportedPlatform:
@@ -103,9 +106,14 @@ struct GoogleOAuthManager: GoogleOAuthManaging {
 
     @MainActor
     func authorize(account: Account, clientSecret: String) async throws -> GoogleOAuthTokens {
+        guard let redirectURI = account.configurationValue(for: Account.ConfigurationKey.googleRedirectURI),
+              let redirectURL = URL(string: redirectURI) else {
+            throw GoogleOAuthError.missingConfiguration("Gemini accounts require a valid Google OAuth redirect URI.")
+        }
+
         let state = UUID().uuidString
         let url = try authorizationURL(for: account, state: state)
-        let code = try await authenticate(url: url)
+        let code = try await authenticate(url: url, expectedState: state, redirectURL: redirectURL)
         return try await exchangeAuthorizationCode(code, account: account, clientSecret: clientSecret)
     }
 
@@ -185,14 +193,19 @@ struct GoogleOAuthManager: GoogleOAuthManaging {
     }
 
     @MainActor
-    private func authenticate(url: URL) async throws -> String {
+    private func authenticate(url: URL, expectedState: String, redirectURL: URL) async throws -> String {
         #if canImport(AppKit)
-        let loopback = OAuthLoopbackServer()
-        // Start the server implicitly by waiting for code. It spins up and binds to 4242.
-        // We trigger the browser after a slight delay to ensure it's listening or we just start listening then open workspace.
-        
-        // Use a task group so we start listening, then open the browser
-        return try await withThrowingTaskGroup(of: String.self) { group in
+        let loopback: OAuthLoopbackServer
+        do {
+            loopback = try OAuthLoopbackServer(redirectURL: redirectURL, expectedState: expectedState)
+        } catch OAuthLoopbackError.invalidConfiguration {
+            throw GoogleOAuthError.invalidRedirect
+        } catch {
+            throw GoogleOAuthError.invalidRedirect
+        }
+
+        do {
+            return try await withThrowingTaskGroup(of: String.self) { group in
             group.addTask {
                 return try await loopback.waitForCode()
             }
@@ -206,6 +219,13 @@ struct GoogleOAuthManager: GoogleOAuthManaging {
             }
             
             return code
+        }
+        } catch OAuthLoopbackError.invalidState {
+            throw GoogleOAuthError.invalidState
+        } catch OAuthLoopbackError.invalidRequest {
+            throw GoogleOAuthError.invalidRedirect
+        } catch {
+            throw error
         }
         #else
         throw GoogleOAuthError.unsupportedPlatform
@@ -260,5 +280,3 @@ struct GoogleOAuthManager: GoogleOAuthManaging {
         return try? JSONDecoder().decode(GoogleOAuthTokens.self, from: data)
     }
 }
-
-

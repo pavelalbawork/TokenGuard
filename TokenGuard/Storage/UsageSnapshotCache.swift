@@ -4,7 +4,7 @@ struct UsageSnapshotCache {
     private static let storageDirectoryName = "TokenGuard"
     private static let legacyStorageDirectoryName = "UsageTool"
 
-    private let storageURL: URL
+    private let storageDirectoryURL: URL
     private let fileManager: FileManager
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -18,7 +18,7 @@ struct UsageSnapshotCache {
         self.fileManager = fileManager
         self.encoder = encoder
         self.decoder = decoder
-        self.storageURL = storageURL ?? Self.defaultStorageURL(fileManager: fileManager)
+        self.storageDirectoryURL = storageURL ?? Self.defaultStorageURL(fileManager: fileManager)
 
         self.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         self.encoder.dateEncodingStrategy = .iso8601
@@ -26,75 +26,101 @@ struct UsageSnapshotCache {
     }
 
     func load() throws -> [UUID: UsageSnapshot] {
-        guard fileManager.fileExists(atPath: storageURL.path) else {
+        try migrateLegacyFileIfNeeded()
+
+        guard directoryExists(at: storageDirectoryURL) else {
             return [:]
         }
 
-        let data = try Data(contentsOf: storageURL)
-        let raw = try decoder.decode([String: UsageSnapshot].self, from: data)
         var snapshots: [UUID: UsageSnapshot] = [:]
-        for (key, value) in raw {
-            if let id = UUID(uuidString: key) {
-                snapshots[id] = value
+        let enumerator = fileManager.enumerator(
+            at: storageDirectoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        while let fileURL = enumerator?.nextObject() as? URL {
+            guard fileURL.pathExtension == "json" else { continue }
+            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values?.isRegularFile == true else { continue }
+            guard let accountID = UUID(uuidString: fileURL.deletingPathExtension().lastPathComponent) else {
+                continue
             }
+            let data = try Data(contentsOf: fileURL)
+            snapshots[accountID] = try decoder.decode(UsageSnapshot.self, from: data)
         }
+
         return snapshots
     }
 
     func save(snapshot: UsageSnapshot) throws {
-        var snapshots = try loadRaw()
-        snapshots[snapshot.accountId.uuidString] = snapshot
-        try persist(raw: snapshots)
+        try migrateLegacyFileIfNeeded()
+        try ensureDirectoryExists()
+
+        let data = try encoder.encode(snapshot)
+        try data.write(to: fileURL(for: snapshot.accountId), options: .atomic)
     }
 
     func remove(accountID: UUID) throws {
-        var snapshots = try loadRaw()
-        snapshots.removeValue(forKey: accountID.uuidString)
-        try persist(raw: snapshots)
+        try migrateLegacyFileIfNeeded()
+        let snapshotURL = fileURL(for: accountID)
+
+        guard fileManager.fileExists(atPath: snapshotURL.path) else { return }
+        try fileManager.removeItem(at: snapshotURL)
     }
 
-    private func loadRaw() throws -> [String: UsageSnapshot] {
-        guard fileManager.fileExists(atPath: storageURL.path) else {
-            return [:]
-        }
-        let data = try Data(contentsOf: storageURL)
-        return try decoder.decode([String: UsageSnapshot].self, from: data)
+    private func ensureDirectoryExists() throws {
+        try fileManager.createDirectory(at: storageDirectoryURL, withIntermediateDirectories: true)
     }
 
-    private func persist(raw: [String: UsageSnapshot]) throws {
-        let directory = storageURL.deletingLastPathComponent()
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        let data = try encoder.encode(raw)
-        try data.write(to: storageURL, options: .atomic)
+    private func fileURL(for accountID: UUID) -> URL {
+        storageDirectoryURL.appendingPathComponent(accountID.uuidString).appendingPathExtension("json")
+    }
+
+    private func directoryExists(at url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     private static func defaultStorageURL(fileManager: FileManager) -> URL {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let storageDirectory = appSupport.appendingPathComponent(storageDirectoryName, isDirectory: true)
-        let storageURL = storageDirectory.appendingPathComponent("usage-snapshots.json", isDirectory: false)
-        let legacyURL = appSupport
-            .appendingPathComponent(legacyStorageDirectoryName, isDirectory: true)
-            .appendingPathComponent("usage-snapshots.json", isDirectory: false)
-
-        migrateLegacyFileIfNeeded(from: legacyURL, to: storageURL, fileManager: fileManager)
-        return storageURL
+        return storageDirectory.appendingPathComponent("usage-snapshots", isDirectory: true)
     }
 
-    private static func migrateLegacyFileIfNeeded(from legacyURL: URL, to storageURL: URL, fileManager: FileManager) {
-        guard !fileManager.fileExists(atPath: storageURL.path),
-              fileManager.fileExists(atPath: legacyURL.path) else {
+    private func migrateLegacyFileIfNeeded() throws {
+        if directoryExists(at: storageDirectoryURL) {
             return
         }
 
-        do {
-            try fileManager.createDirectory(
-                at: storageURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try fileManager.moveItem(at: legacyURL, to: storageURL)
-        } catch {
-            try? fileManager.copyItem(at: legacyURL, to: storageURL)
+        let legacyCandidates = legacyFileCandidates()
+        guard let legacyFileURL = legacyCandidates.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
+            return
         }
+
+        let data = try Data(contentsOf: legacyFileURL)
+        let raw = try decoder.decode([String: UsageSnapshot].self, from: data)
+
+        try fileManager.removeItem(at: legacyFileURL)
+        try ensureDirectoryExists()
+
+        for (key, snapshot) in raw {
+            guard let accountID = UUID(uuidString: key) else { continue }
+            let snapshotData = try encoder.encode(snapshot)
+            try snapshotData.write(to: fileURL(for: accountID), options: .atomic)
+        }
+    }
+
+    private func legacyFileCandidates() -> [URL] {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let currentLegacyURL = appSupport
+            .appendingPathComponent(Self.storageDirectoryName, isDirectory: true)
+            .appendingPathComponent("usage-snapshots.json", isDirectory: false)
+        let oldAppURL = appSupport
+            .appendingPathComponent(Self.legacyStorageDirectoryName, isDirectory: true)
+            .appendingPathComponent("usage-snapshots.json", isDirectory: false)
+        return [storageDirectoryURL, currentLegacyURL, oldAppURL]
     }
 }

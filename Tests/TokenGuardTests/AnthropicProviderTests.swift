@@ -71,6 +71,30 @@ private struct MockClaudeAuthStatusReader: ClaudeAuthStatusReading {
 }
 
 final class AnthropicProviderTests: XCTestCase {
+    func testClaudeSessionSnapshotReaderAggregatesOnlyRecentAssistantUsage() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let sessionFile = tempDirectory.appendingPathComponent("session.jsonl")
+        try """
+        {"timestamp":"2026-04-01T00:00:00Z","type":"assistant","message":{"model":"claude-sonnet","usage":{"input_tokens":999,"output_tokens":1}}}
+        {"timestamp":"2026-04-20T09:00:00Z","type":"assistant","message":{"model":"claude-sonnet","usage":{"input_tokens":10,"output_tokens":5}}}
+        {"timestamp":"2026-04-20T12:00:00Z","type":"assistant","message":{"model":"claude-sonnet","usage":{"input_tokens":7,"output_tokens":3}}}
+        """.write(to: sessionFile, atomically: true, encoding: .utf8)
+
+        let reader = ClaudeSessionSnapshotReader(
+            rootDirectoryURL: tempDirectory,
+            now: { Date(timeIntervalSince1970: 1_776_031_200) }
+        )
+
+        let windows = try XCTUnwrap(reader.windows(for: .claude))
+
+        XCTAssertEqual(windows.first(where: { $0.windowType == .rolling5h })?.used ?? -1, 25, accuracy: 0.1)
+        XCTAssertEqual(windows.first(where: { $0.windowType == .weekly })?.used ?? -1, 25, accuracy: 0.1)
+    }
+
     func testCurrentConsumerIdentityUsesClaudeAuthStatusEmail() async throws {
         let provider = AnthropicProvider(
             session: makeMockedSession(),

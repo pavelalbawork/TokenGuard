@@ -1,27 +1,50 @@
 import Foundation
 import Network
 
-enum OAuthLoopbackError: LocalizedError {
+enum OAuthLoopbackError: LocalizedError, Equatable {
     case timeout
     case invalidRequest
+    case invalidState
+    case invalidConfiguration
     case portUnavailable
 
     var errorDescription: String? {
         switch self {
         case .timeout: return "The authentication request timed out."
         case .invalidRequest: return "Received an invalid callback payload."
-        case .portUnavailable: return "Could not bind to local port 4242. Make sure no other apps are using it."
+        case .invalidState: return "The Google OAuth callback state did not match the active sign-in request."
+        case .invalidConfiguration: return "The Google OAuth redirect URI must use a loopback host with an explicit port."
+        case .portUnavailable: return "Could not bind to the local OAuth callback port. Make sure no other apps are using it."
         }
     }
 }
 
 final class OAuthLoopbackServer: @unchecked Sendable {
-    private let port: NWEndpoint.Port = 4242
+    private let localHost: NWEndpoint.Host
+    private let port: NWEndpoint.Port
+    private let expectedPath: String
+    private let expectedState: String
     private var listener: NWListener?
     private var activeConnections = [NWConnection]()
     private let lock = NSLock()
     private var isCompleted = false
-    
+
+    init(redirectURL: URL, expectedState: String) throws {
+        guard
+            let host = redirectURL.host,
+            let localHost = Self.loopbackHost(from: host),
+            let portValue = redirectURL.port,
+            let port = NWEndpoint.Port(rawValue: UInt16(portValue))
+        else {
+            throw OAuthLoopbackError.invalidConfiguration
+        }
+
+        self.localHost = localHost
+        self.port = port
+        self.expectedPath = Self.normalizedPath(redirectURL.path)
+        self.expectedState = expectedState
+    }
+
     func waitForCode() async throws -> String {
         return try await withCheckedThrowingContinuation { continuation in
             let complete: @Sendable (Result<String, Error>) -> Void = { [weak self] result in
@@ -40,7 +63,10 @@ final class OAuthLoopbackServer: @unchecked Sendable {
             }
             
             do {
-                let listener = try NWListener(using: .tcp, on: port)
+                let parameters = NWParameters.tcp
+                parameters.requiredLocalEndpoint = .hostPort(host: localHost, port: port)
+
+                let listener = try NWListener(using: parameters)
                 self.listener = listener
                 
                 listener.newConnectionHandler = { [weak self] connection in
@@ -91,40 +117,69 @@ final class OAuthLoopbackServer: @unchecked Sendable {
                 return
             }
             
-            let lines = request.components(separatedBy: .newlines)
-            guard let requestLine = lines.first else {
-                connection.cancel()
-                return
-            }
-            
-            let parts = requestLine.components(separatedBy: .whitespaces)
-            guard parts.count >= 2, parts[0] == "GET" else {
-                connection.cancel()
-                return
-            }
-            
-            guard let urlComponents = URLComponents(string: parts[1]),
-                  let queryItems = urlComponents.queryItems else {
-                connection.cancel()
-                return
-            }
-            
-            if queryItems.first(where: { $0.name == "error" })?.value != nil {
-                self?.respond(to: connection, success: false) {
-                    completion(.failure(OAuthLoopbackError.invalidRequest))
+            do {
+                guard let self else {
+                    connection.cancel()
+                    return
                 }
-                return
-            }
-            
-            guard let code = queryItems.first(where: { $0.name == "code" })?.value else {
-                connection.cancel()
-                return
-            }
-            
-            self?.respond(to: connection, success: true) {
-                completion(.success(code))
+
+                let code = try Self.authorizationCode(
+                    from: request,
+                    expectedPath: self.expectedPath,
+                    expectedState: self.expectedState
+                )
+
+                self.respond(to: connection, success: true) {
+                    completion(.success(code))
+                }
+            } catch {
+                self?.respond(to: connection, success: false) {
+                    completion(.failure(error))
+                }
             }
         }
+    }
+
+    static func authorizationCode(
+        from request: String,
+        expectedPath: String,
+        expectedState: String
+    ) throws -> String {
+        let lines = request.components(separatedBy: .newlines)
+        guard let requestLine = lines.first else {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        let parts = requestLine.components(separatedBy: .whitespaces)
+        guard parts.count >= 2, parts[0] == "GET" else {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        guard let urlComponents = URLComponents(string: parts[1]) else {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        let path = normalizedPath(urlComponents.path)
+        guard path == normalizedPath(expectedPath) else {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        let queryItems = urlComponents.queryItems ?? []
+        if queryItems.first(where: { $0.name == "error" })?.value != nil {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        guard let state = queryItems.first(where: { $0.name == "state" })?.value,
+              state == expectedState else {
+            throw OAuthLoopbackError.invalidState
+        }
+
+        guard let code = queryItems.first(where: { $0.name == "code" })?.value,
+              !code.isEmpty else {
+            throw OAuthLoopbackError.invalidRequest
+        }
+
+        return code
     }
     
     private func respond(to connection: NWConnection, success: Bool, completion: @escaping @Sendable () -> Void) {
@@ -146,5 +201,22 @@ final class OAuthLoopbackServer: @unchecked Sendable {
         connection.send(content: response.data(using: .utf8), completion: .contentProcessed { _ in
             completion()
         })
+    }
+
+    private static func normalizedPath(_ path: String) -> String {
+        path.isEmpty ? "/" : path
+    }
+
+    private static func loopbackHost(from host: String) -> NWEndpoint.Host? {
+        switch host.lowercased() {
+        case "localhost", "127.0.0.1":
+            guard let address = IPv4Address("127.0.0.1") else { return nil }
+            return .ipv4(address)
+        case "::1":
+            guard let address = IPv6Address("::1") else { return nil }
+            return .ipv6(address)
+        default:
+            return nil
+        }
     }
 }

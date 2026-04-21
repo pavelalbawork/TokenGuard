@@ -53,7 +53,7 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
             options: [.skipsHiddenFiles]
         )
 
-        var sessionFiles: [(url: URL, modifiedAt: Date)] = []
+        var sessionFiles: [URL] = []
         while let fileURL = enumerator?.nextObject() as? URL {
             guard fileURL.pathExtension == "jsonl" else { continue }
             let values = try? fileURL.resourceValues(
@@ -62,25 +62,20 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
             let modified = values?.contentModificationDate ?? .distantPast
             // Quick pre-filter: skip files not touched in the last 7 days.
             guard modified >= cutoff7d else { continue }
-            sessionFiles.append((fileURL, modified))
+            sessionFiles.append(fileURL)
         }
 
         var tokens5h: Double = 0
         var tokens7d: Double  = 0
 
-        for (fileURL, _) in sessionFiles {
-            guard let data = try? Data(contentsOf: fileURL),
-                  let content = String(data: data, encoding: .utf8) else { continue }
-
-            for rawLine in content.split(separator: "\n", omittingEmptySubsequences: true) {
-                accumulate(
-                    line: String(rawLine),
-                    cutoff5h: cutoff5h,
-                    cutoff7d: cutoff7d,
-                    tokens5h: &tokens5h,
-                    tokens7d: &tokens7d
-                )
-            }
+        for fileURL in sessionFiles {
+            try accumulateRecentUsage(
+                from: fileURL,
+                cutoff5h: cutoff5h,
+                cutoff7d: cutoff7d,
+                tokens5h: &tokens5h,
+                tokens7d: &tokens7d
+            )
         }
 
         guard tokens7d > 0 else {
@@ -112,35 +107,59 @@ struct ClaudeSessionSnapshotReader: ConsumerUsageSnapshotReading {
 
     // MARK: - Private
 
+    private func accumulateRecentUsage(
+        from fileURL: URL,
+        cutoff5h: Date,
+        cutoff7d: Date,
+        tokens5h: inout Double,
+        tokens7d: inout Double
+    ) throws {
+        try ReverseJSONLFileReader.scanLines(in: fileURL) { line in
+            accumulate(
+                line: line,
+                cutoff5h: cutoff5h,
+                cutoff7d: cutoff7d,
+                tokens5h: &tokens5h,
+                tokens7d: &tokens7d
+            )
+        }
+    }
+
     private func accumulate(
         line: String,
         cutoff5h: Date,
         cutoff7d: Date,
         tokens5h: inout Double,
         tokens7d: inout Double
-    ) {
+    ) -> ReverseJSONLFileReader.Control {
         guard let data = line.data(using: .utf8),
               let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        else { return }
+        else { return .continue }
+
+        guard let timestampStr = json["timestamp"] as? String,
+              let timestamp = ProviderSupport.isoDate(timestampStr) else {
+            return .continue
+        }
+
+        if timestamp < cutoff7d {
+            return .stop
+        }
 
         // Only count assistant entries that came from real API calls.
         guard json["type"] as? String == "assistant",
               let message = json["message"] as? [String: Any],
               let usage = message["usage"] as? [String: Any]
-        else { return }
+        else { return .continue }
 
         // "<synthetic>" entries are compact/summarised recaps — skip them.
-        if let model = message["model"] as? String, model == "<synthetic>" { return }
+        if let model = message["model"] as? String, model == "<synthetic>" { return .continue }
 
         let count = tokenCount(from: usage)
-        guard count > 0 else { return }
-
-        guard let timestampStr = json["timestamp"] as? String,
-              let timestamp = ProviderSupport.isoDate(timestampStr)
-        else { return }
+        guard count > 0 else { return .continue }
 
         if timestamp >= cutoff7d { tokens7d  += count }
         if timestamp >= cutoff5h { tokens5h += count }
+        return .continue
     }
 
     /// Sum all token dimensions that represent real Anthropic API processing.

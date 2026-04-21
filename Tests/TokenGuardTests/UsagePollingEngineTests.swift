@@ -1019,6 +1019,69 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(window.used, 0, accuracy: 0.1)
         XCTAssertEqual(window.resetDate, oldResetDate.addingTimeInterval(15 * 60 * 60))
     }
+
+    func testUsageSnapshotCacheMigratesLegacySingleFileIntoPerAccountFiles() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let legacyURL = tempDirectory.appendingPathComponent("usage-snapshots.json")
+        let accountID = UUID()
+        let snapshot = UsageSnapshot(
+            accountId: accountID,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 5, limit: 10, unit: .requests, resetDate: nil, label: "PRO")
+            ],
+            tier: "Gemini Code Assist"
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode([accountID.uuidString: snapshot]).write(to: legacyURL)
+
+        let cache = UsageSnapshotCache(storageURL: legacyURL)
+        let loaded = try cache.load()
+
+        XCTAssertEqual(loaded[accountID]?.windows.first?.used ?? -1, 5, accuracy: 0.1)
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyURL.path, isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyURL.appendingPathComponent(accountID.uuidString).appendingPathExtension("json").path))
+    }
+
+    func testUsageSnapshotCacheRemovesOnlyRequestedSnapshotFile() throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let cacheURL = tempDirectory.appendingPathComponent("usage-snapshots")
+        let firstSnapshot = UsageSnapshot(
+            accountId: UUID(),
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [UsageWindow(windowType: .daily, used: 1, limit: 10, unit: .requests, resetDate: nil, label: "PRO")],
+            tier: "Gemini Code Assist"
+        )
+        let secondSnapshot = UsageSnapshot(
+            accountId: UUID(),
+            timestamp: Date(timeIntervalSince1970: 1_775_000_001),
+            windows: [UsageWindow(windowType: .daily, used: 2, limit: 10, unit: .requests, resetDate: nil, label: "FLASH")],
+            tier: "Gemini Code Assist"
+        )
+
+        let cache = UsageSnapshotCache(storageURL: cacheURL)
+        try cache.save(snapshot: firstSnapshot)
+        try cache.save(snapshot: secondSnapshot)
+
+        try cache.remove(accountID: firstSnapshot.accountId)
+        let loaded = try cache.load()
+
+        XCTAssertNil(loaded[firstSnapshot.accountId])
+        XCTAssertEqual(loaded[secondSnapshot.accountId]?.windows.first?.used ?? -1, 2, accuracy: 0.1)
+    }
 }
 
 private struct MockConsumerIdentityProvider: ServiceProvider, ConsumerAccountDetecting {

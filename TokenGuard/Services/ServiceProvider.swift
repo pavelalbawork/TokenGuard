@@ -48,6 +48,81 @@ final class SnapshotReaderTTLCache: @unchecked Sendable {
     }
 }
 
+enum ReverseJSONLFileReader {
+    enum Control {
+        case `continue`
+        case stop
+    }
+
+    static func scanLines(
+        in fileURL: URL,
+        chunkSize: Int = 16_384,
+        _ body: (String) throws -> Control
+    ) throws {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? handle.close()
+        }
+
+        let fileSize = try handle.seekToEnd()
+        var position = Int(fileSize)
+        var carry = Data()
+
+        while position > 0 {
+            let readSize = min(chunkSize, position)
+            position -= readSize
+
+            try handle.seek(toOffset: UInt64(position))
+            guard let chunk = try handle.read(upToCount: readSize), !chunk.isEmpty else {
+                break
+            }
+
+            var combined = Data()
+            combined.reserveCapacity(chunk.count + carry.count)
+            combined.append(chunk)
+            combined.append(carry)
+
+            let segments = combined.split(separator: 0x0A, omittingEmptySubsequences: false)
+            var linesToProcess: [Data] = []
+            if position > 0 {
+                carry = Data(segments.first ?? Data())
+                var index = segments.endIndex
+                while index > segments.startIndex {
+                    index = segments.index(before: index)
+                    if index == segments.startIndex {
+                        break
+                    }
+                    linesToProcess.append(Data(segments[index]))
+                }
+            } else {
+                carry.removeAll(keepingCapacity: false)
+                var index = segments.endIndex
+                while index > segments.startIndex {
+                    index = segments.index(before: index)
+                    linesToProcess.append(Data(segments[index]))
+                }
+            }
+
+            for lineData in linesToProcess {
+                let normalizedLine = normalizedLineString(from: lineData)
+                guard !normalizedLine.isEmpty else { continue }
+
+                if try body(normalizedLine) == .stop {
+                    return
+                }
+            }
+        }
+    }
+
+    private static func normalizedLineString(from data: Data) -> String {
+        var line = String(decoding: data, as: UTF8.self)
+        if line.last == "\r" {
+            line.removeLast()
+        }
+        return line
+    }
+}
+
 struct CodexConsumerSnapshot: Sendable, Equatable {
     let windows: [UsageWindow]
     let identity: ConsumerAccountIdentity?
@@ -695,18 +770,12 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
             options: [.skipsHiddenFiles]
         )
-
-        var sessionFiles: [(url: URL, modifiedAt: Date)] = []
+        var latest: TimestampedWindows?
         while let fileURL = enumerator?.nextObject() as? URL {
             guard fileURL.pathExtension == "jsonl" else { continue }
             let values = try fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
             guard values.isRegularFile == true else { continue }
-            sessionFiles.append((fileURL, values.contentModificationDate ?? .distantPast))
-        }
-
-        var latest: TimestampedWindows?
-        for candidate in sessionFiles.sorted(by: { $0.modifiedAt > $1.modifiedAt }) {
-            if let parsed = try? windows(from: candidate.url, fallbackTimestamp: candidate.modifiedAt) {
+            if let parsed = try? windows(from: fileURL, fallbackTimestamp: values.contentModificationDate ?? .distantPast) {
                 if latest == nil || parsed.timestamp > latest!.timestamp {
                     latest = parsed
                 }
@@ -719,16 +788,14 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
     }
 
     private func windows(from fileURL: URL, fallbackTimestamp: Date) throws -> TimestampedWindows? {
-        let data = try Data(contentsOf: fileURL)
-        guard let content = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-
         var latest: TimestampedWindows?
-        for line in content.split(separator: "\n", omittingEmptySubsequences: true) {
-            guard let lineData = line.data(using: .utf8) else { continue }
+
+        try ReverseJSONLFileReader.scanLines(in: fileURL) { line in
+            guard let lineData = line.data(using: .utf8) else {
+                return .continue
+            }
             guard let payload = try? JSONSerialization.jsonObject(with: lineData) else {
-                continue
+                return .continue
             }
             guard
                 let object = payload as? [String: Any],
@@ -737,17 +804,17 @@ struct CodexSessionSnapshotReader: ConsumerUsageSnapshotReading {
                 ProviderSupport.string(message["type"]) == "token_count",
                 let rateLimits = message["rate_limits"] as? [String: Any]
             else {
-                continue
+                return .continue
             }
 
             let windows = windows(from: rateLimits)
-
-            if !windows.isEmpty {
-                let timestamp = ProviderSupport.isoDate(object["timestamp"]) ?? fallbackTimestamp
-                if latest == nil || timestamp > latest!.timestamp {
-                    latest = TimestampedWindows(timestamp: timestamp, windows: windows)
-                }
+            guard !windows.isEmpty else {
+                return .continue
             }
+
+            let timestamp = ProviderSupport.isoDate(object["timestamp"]) ?? fallbackTimestamp
+            latest = TimestampedWindows(timestamp: timestamp, windows: windows)
+            return .stop
         }
 
         return latest
