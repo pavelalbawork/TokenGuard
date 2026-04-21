@@ -136,7 +136,7 @@ final class UsagePollingEngine {
             normalizeExpiredSnapshots()
             await synchronizeActiveConsumerAccounts(force: shouldForce)
             if shouldForce {
-                await codexClient.requestImmediateRefresh()
+                await forceSubscribedRefresh()
             }
 
             isRefreshing = true
@@ -194,7 +194,7 @@ final class UsagePollingEngine {
         }
 
         if usesSubscribedRefresh(account) {
-            await codexClient.requestImmediateRefresh()
+            await forceSubscribedRefresh()
             return
         }
 
@@ -391,6 +391,10 @@ final class UsagePollingEngine {
         return normalized.isEmpty ? nil : normalized
     }
 
+    private func snapshotIdentityConflicts(_ snapshot: CodexConsumerSnapshot, with identity: ConsumerAccountIdentity?) -> Bool {
+        identitiesConflict(snapshot.identity, identity)
+    }
+
     private func shouldPoll(_ account: Account) -> Bool {
         if usesSubscribedRefresh(account) {
             return false
@@ -404,6 +408,14 @@ final class UsagePollingEngine {
 
     private func usesSubscribedRefresh(_ account: Account) -> Bool {
         account.serviceType == .codex && account.planType == "consumer"
+    }
+
+    private func forceSubscribedRefresh() async {
+        guard accountStore.accounts.contains(where: { $0.isEnabled && usesSubscribedRefresh($0) }) else {
+            return
+        }
+
+        await codexClient.restart()
     }
 
     private func shouldRefresh(_ account: Account) -> Bool {
@@ -535,7 +547,19 @@ final class UsagePollingEngine {
         state.connectionStatus = liveState.status
         state.lastAttemptAt = Date()
 
-        if let liveSnapshot = liveState.snapshot {
+        if let liveSnapshot = liveState.snapshot,
+           snapshotIdentityConflicts(liveSnapshot, with: effectiveIdentity) {
+            state.connectionStatus = .connecting
+            state.errorMessage = nil
+            if let existingSnapshot = state.snapshot {
+                state.snapshot = existingSnapshot.markingStale(true)
+                state.lastSuccessAt = existingSnapshot.timestamp
+            }
+            updatedStates[activeAccountID] = state
+            accountStates = updatedStates
+            await codexClient.restart()
+            return
+        } else if let liveSnapshot = liveState.snapshot {
             let snapshot = UsageSnapshot(
                 accountId: activeAccount.id,
                 timestamp: liveState.lastUpdateAt ?? Date(),

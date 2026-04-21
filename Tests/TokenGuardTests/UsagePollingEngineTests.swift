@@ -614,6 +614,246 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used, 56)
     }
 
+    func testForcedRefreshRestartsCodexSessionWhenLiveIdentityAndUsageAreOutOfSync() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let oldAccount = Account(
+            name: "old@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-old",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+        let newAccount = Account(
+            name: "new@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-new",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "new@example.com"
+            ]
+        )
+
+        try accountStore.add(oldAccount)
+        try accountStore.add(newAccount)
+
+        final class SessionSequence: @unchecked Sendable {
+            private let lock = NSLock()
+            private var index = 0
+            let sessions: [MockCodexAppServerSession]
+
+            init(sessions: [MockCodexAppServerSession]) {
+                self.sessions = sessions
+            }
+
+            func next() -> MockCodexAppServerSession {
+                lock.lock()
+                defer { lock.unlock() }
+                let session = sessions[min(index, sessions.count - 1)]
+                index += 1
+                return session
+            }
+        }
+
+        let firstSession = MockCodexAppServerSession { line, session in
+            guard let data = line.data(using: .utf8),
+                  let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = payload["id"] as? Int else {
+                return
+            }
+
+            if id == 1 {
+                session.emit(.stdout("""
+{"id":1,"result":{"userAgent":"Codex Desktop","codexHome":"/Users/example/.codex","platformFamily":"unix","platformOs":"macos"}}
+"""))
+            }
+
+            if id == 2 {
+                session.emit(.stdout("""
+{"id":2,"result":{"account":{"type":"chatgpt","email":"new@example.com","planType":"team"},"requiresOpenaiAuth":true}}
+"""))
+            }
+
+            if id == 3 {
+                session.emit(.stdout("""
+{"id":3,"result":{"rateLimits":{"limitId":"codex","limitName":null,"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":34,"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"team"},"rateLimitsByLimitId":{"codex":{"limitId":"codex","limitName":null,"primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1775600233},"secondary":{"usedPercent":34,"windowDurationMins":10080,"resetsAt":1775754683},"credits":{"hasCredits":false,"unlimited":false,"balance":null},"planType":"team"}}}}
+"""))
+            }
+        }
+        let secondSession = makeBootstrapCodexSession(
+            email: "new@example.com",
+            planType: "team",
+            primaryUsedPercent: 56,
+            secondaryUsedPercent: 78
+        )
+        let sequence = SessionSequence(sessions: [firstSession, secondSession])
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory { sequence.next() },
+            sleep: { _ in },
+            reconnectBackoff: [0]
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            codexClient: codexClient,
+            providers: [
+                .codex: OpenAIProvider(
+                    codexLiveStateProvider: codexClient,
+                    identityReader: CodexAuthIdentityReader(authURL: tempDirectory.appendingPathComponent("missing-auth.json"))
+                )
+            ],
+            serviceRefreshIntervals: [.codex: 300],
+            sleep: { _ in }
+        )
+
+        engine.start()
+        let showedStaleUsageOnNewAccount = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == newAccount.id &&
+            engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used == 12
+        }
+
+        XCTAssertTrue(showedStaleUsageOnNewAccount)
+
+        await engine.refreshAll(force: true)
+
+        let sawFreshUsageAfterForcedRefresh = await waitUntil {
+            engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used == 56
+        }
+
+        XCTAssertTrue(sawFreshUsageAfterForcedRefresh)
+        XCTAssertEqual(accountStore.activeConsumerAccountID(for: .codex), newAccount.id)
+    }
+
+    func testCodexIdentityUpdateDoesNotApplyOldLiveSnapshotToNewAccount() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let oldAccount = Account(
+            name: "old@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-old",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+        let newAccount = Account(
+            name: "new@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-new",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "new@example.com"
+            ]
+        )
+
+        try accountStore.add(oldAccount)
+        try accountStore.add(newAccount)
+
+        final class SessionSequence: @unchecked Sendable {
+            private let lock = NSLock()
+            private var index = 0
+            let sessions: [MockCodexAppServerSession]
+
+            init(sessions: [MockCodexAppServerSession]) {
+                self.sessions = sessions
+            }
+
+            func next() -> MockCodexAppServerSession {
+                lock.lock()
+                defer { lock.unlock() }
+                let session = sessions[min(index, sessions.count - 1)]
+                index += 1
+                return session
+            }
+        }
+
+        let firstSession = makeBootstrapCodexSession(
+            email: "old@example.com",
+            planType: "team",
+            primaryUsedPercent: 12,
+            secondaryUsedPercent: 34
+        )
+        let secondSession = makeBootstrapCodexSession(
+            email: "new@example.com",
+            planType: "team",
+            primaryUsedPercent: 56,
+            secondaryUsedPercent: 78
+        )
+        let sequence = SessionSequence(sessions: [firstSession, secondSession])
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory { sequence.next() },
+            sleep: { _ in },
+            reconnectBackoff: [0]
+        )
+
+        let provider = MutableConsumerIdentityProvider(
+            serviceType: .codex,
+            identity: ConsumerAccountIdentity(email: "old@example.com", externalID: nil),
+            snapshot: UsageSnapshot(
+                accountId: oldAccount.id,
+                timestamp: Date(timeIntervalSince1970: 1_710_000_000),
+                windows: [],
+                tier: nil
+            )
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            codexClient: codexClient,
+            providers: [.codex: provider],
+            serviceRefreshIntervals: [.codex: 300],
+            sleep: { _ in }
+        )
+
+        engine.start()
+        let sawInitialSnapshot = await waitUntil {
+            accountStore.activeConsumerAccountID(for: .codex) == oldAccount.id &&
+            engine.accountStates[oldAccount.id]?.snapshot?.windows.first?.used == 12
+        }
+
+        XCTAssertTrue(sawInitialSnapshot)
+
+        provider.identity = ConsumerAccountIdentity(email: "new@example.com", externalID: nil)
+        firstSession.emit(.stdout("""
+{"id":2,"result":{"account":{"type":"chatgpt","email":"new@example.com","planType":"team"},"requiresOpenaiAuth":true}}
+"""))
+
+        let switchedWithoutApplyingOldUsage = await waitUntil {
+            guard accountStore.activeConsumerAccountID(for: .codex) == newAccount.id else {
+                return false
+            }
+
+            let used = engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used
+            return used != 12
+        }
+
+        XCTAssertTrue(switchedWithoutApplyingOldUsage)
+
+        let sawFreshUsage = await waitUntil {
+            engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used == 56
+        }
+
+        XCTAssertTrue(sawFreshUsage)
+    }
+
     func testGlobalRefreshIntervalControlsPollableProviderCadence() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
