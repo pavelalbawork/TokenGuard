@@ -507,6 +507,7 @@ actor CodexAppServerClient: CodexLiveStateProviding {
         runTask = nil
         currentSession?.stop()
         currentSession = nil
+        prepareForReconnect()
     }
 
     func requestImmediateRefresh() async {
@@ -522,7 +523,19 @@ actor CodexAppServerClient: CodexLiveStateProviding {
         currentSession?.stop()
         currentSession = nil
         reconnectRequested = true
+        prepareForReconnect()
         start()
+    }
+
+    private func prepareForReconnect() {
+        state = CodexLiveState(
+            snapshot: state.snapshot,
+            identity: nil,
+            status: state.snapshot == nil ? .connecting : .staleFallback,
+            lastUpdateAt: state.lastUpdateAt,
+            lastErrorText: nil
+        )
+        publish()
     }
 
     private func runLoop() async {

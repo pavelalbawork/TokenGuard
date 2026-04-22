@@ -470,7 +470,7 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(engine.accountStates[newAccount.id]?.snapshot?.windows.first?.used, 56)
     }
 
-    func testCodexConsumerAccountDoesNotDrivePollingCadence() async throws {
+    func testCodexConsumerAccountDrivesPollingCadence() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
@@ -498,7 +498,7 @@ final class UsagePollingEngineTests: XCTestCase {
             sleep: { _ in }
         )
 
-        XCTAssertEqual(engine.pollCadence, 300)
+        XCTAssertEqual(engine.pollCadence, 5)
     }
 
     func testCodexLiveErrorFallsBackToSessionSnapshot() async throws {
@@ -796,6 +796,126 @@ final class UsagePollingEngineTests: XCTestCase {
 
         XCTAssertTrue(sawFreshUsageAfterForcedRefresh)
         XCTAssertEqual(accountStore.activeConsumerAccountID(for: .codex), newAccount.id)
+    }
+
+    func testScheduledRefreshRequestsCodexBootstrapWhenConsumerIntervalIsDue() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "codex@example.com",
+            serviceType: .codex,
+            credentialRef: "codex-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "codex@example.com"
+            ]
+        )
+        try accountStore.add(account)
+
+        final class SessionSequence: @unchecked Sendable {
+            private let lock = NSLock()
+            private var index = 0
+            let sessions: [MockCodexAppServerSession]
+
+            init(sessions: [MockCodexAppServerSession]) {
+                self.sessions = sessions
+            }
+
+            func next() -> MockCodexAppServerSession {
+                lock.lock()
+                defer { lock.unlock() }
+                let session = sessions[min(index, sessions.count - 1)]
+                index += 1
+                return session
+            }
+        }
+
+        let firstSession = makeBootstrapCodexSession(
+            email: "codex@example.com",
+            planType: "team",
+            primaryUsedPercent: 12,
+            secondaryUsedPercent: 34
+        )
+        let secondSession = makeBootstrapCodexSession(
+            email: "codex@example.com",
+            planType: "team",
+            primaryUsedPercent: 61,
+            secondaryUsedPercent: 74
+        )
+        let sequence = SessionSequence(sessions: [firstSession, secondSession])
+
+        let codexClient = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory { sequence.next() },
+            sleep: { _ in },
+            reconnectBackoff: [0]
+        )
+        final class RefreshIntervalBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value: TimeInterval?
+
+            init(_ value: TimeInterval?) {
+                self.value = value
+            }
+
+            func get() -> TimeInterval? {
+                lock.lock()
+                defer { lock.unlock() }
+                return value
+            }
+
+            func set(_ newValue: TimeInterval?) {
+                lock.lock()
+                value = newValue
+                lock.unlock()
+            }
+        }
+
+        let refreshInterval = RefreshIntervalBox(3_600)
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            codexClient: codexClient,
+            providers: [
+                .codex: OpenAIProvider(
+                    codexLiveStateProvider: codexClient,
+                    identityReader: CodexAuthIdentityReader(authURL: tempDirectory.appendingPathComponent("missing-auth.json"))
+                )
+            ],
+            serviceRefreshIntervals: [.codex: 300],
+            refreshIntervalProvider: { refreshInterval.get() },
+            sleep: { _ in }
+        )
+
+        engine.accountStates[account.id] = UsagePollingEngine.AccountRefreshState(
+            snapshot: nil,
+            errorMessage: nil,
+            lastAttemptAt: Date(),
+            lastSuccessAt: nil,
+            connectionStatus: nil
+        )
+
+        engine.start()
+        let sawInitialUsage = await waitUntil {
+            engine.accountStates[account.id]?.snapshot?.windows.first?.used == 12
+        }
+        XCTAssertTrue(sawInitialUsage)
+
+        refreshInterval.set(0)
+        await engine.refreshAll(force: false)
+
+        let sawUpdatedUsage = await waitUntil {
+            engine.accountStates[account.id]?.snapshot?.windows.first?.used == 61
+        }
+
+        XCTAssertTrue(sawUpdatedUsage)
     }
 
     func testCodexIdentityUpdateDoesNotApplyOldLiveSnapshotToNewAccount() async throws {

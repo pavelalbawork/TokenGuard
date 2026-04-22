@@ -432,6 +432,87 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertTrue(sawReconnect)
     }
 
+    func testCodexClientRestartClearsIdentityUntilNewBootstrap() async throws {
+        final class SessionSequence: @unchecked Sendable {
+            private let lock = NSLock()
+            private var index = 0
+            let sessions: [MockCodexAppServerSession]
+
+            init(sessions: [MockCodexAppServerSession]) {
+                self.sessions = sessions
+            }
+
+            func next() -> MockCodexAppServerSession {
+                lock.lock()
+                defer { lock.unlock() }
+                let session = sessions[min(index, sessions.count - 1)]
+                index += 1
+                return session
+            }
+        }
+
+        let firstSession = makeBootstrapCodexSession(
+            email: "old@example.com",
+            planType: "team",
+            primaryUsedPercent: 32,
+            secondaryUsedPercent: 94
+        )
+        let secondSession = makeBootstrapCodexSession(
+            email: "new@example.com",
+            planType: "team",
+            primaryUsedPercent: 41,
+            secondaryUsedPercent: 94
+        )
+        let sequence = SessionSequence(sessions: [firstSession, secondSession])
+
+        let client = CodexAppServerClient(
+            sessionFactory: MockCodexAppServerSessionFactory { sequence.next() },
+            sleep: { interval in
+                try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            },
+            reconnectBackoff: [0.2]
+        )
+
+        await client.start()
+
+        for _ in 0..<50 {
+            let state = await client.currentState()
+            if state.identity?.email == "old@example.com",
+               state.snapshot?.windows.first?.used == 32 {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        await client.restart()
+
+        var sawClearedIdentity = false
+        for _ in 0..<50 {
+            let state = await client.currentState()
+            if state.identity == nil,
+               state.snapshot?.windows.first?.used == 32,
+               state.status != .live {
+                sawClearedIdentity = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(sawClearedIdentity)
+
+        var sawReconnect = false
+        for _ in 0..<50 {
+            let state = await client.currentState()
+            if state.identity?.email == "new@example.com",
+               state.snapshot?.windows.first?.used == 41,
+               state.status == .live {
+                sawReconnect = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(sawReconnect)
+    }
+
     private static func jwt(email: String) -> String {
         let header = #"{"alg":"none"}"#
         let payload = #"{"email":"\#(email)"}"#

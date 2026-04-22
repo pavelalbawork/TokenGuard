@@ -135,9 +135,7 @@ final class UsagePollingEngine {
         repeat {
             normalizeExpiredSnapshots()
             await synchronizeActiveConsumerAccounts(force: shouldForce)
-            if shouldForce {
-                await forceSubscribedRefresh()
-            }
+            await refreshSubscribedAccounts(force: shouldForce)
 
             isRefreshing = true
 
@@ -194,7 +192,7 @@ final class UsagePollingEngine {
         }
 
         if usesSubscribedRefresh(account) {
-            await forceSubscribedRefresh()
+            await refreshSubscribedAccounts(force: true)
             return
         }
 
@@ -261,7 +259,7 @@ final class UsagePollingEngine {
     var pollCadence: TimeInterval {
         let pollableAccounts = accountStore.accounts
             .filter(\.isEnabled)
-            .filter { shouldPoll($0) }
+            .filter { shouldAutoRefresh($0) }
 
         guard !pollableAccounts.isEmpty else {
             return 300
@@ -410,12 +408,52 @@ final class UsagePollingEngine {
         account.serviceType == .codex && account.planType == "consumer"
     }
 
-    private func forceSubscribedRefresh() async {
-        guard accountStore.accounts.contains(where: { $0.isEnabled && usesSubscribedRefresh($0) }) else {
+    private func shouldAutoRefresh(_ account: Account) -> Bool {
+        if usesSubscribedRefresh(account) {
+            return accountStore.activeConsumerAccountID(for: account.serviceType) == account.id
+        }
+        return shouldPoll(account)
+    }
+
+    private func refreshSubscribedAccounts(force: Bool) async {
+        let subscribedAccounts = accountStore.accounts
+            .filter(\.isEnabled)
+            .filter { usesSubscribedRefresh($0) }
+            .filter { accountStore.activeConsumerAccountID(for: $0.serviceType) == $0.id }
+
+        guard !subscribedAccounts.isEmpty else {
             return
         }
 
+        let dueAccounts = force ? subscribedAccounts : subscribedAccounts.filter { shouldRefresh($0) }
+        guard !dueAccounts.isEmpty else {
+            return
+        }
+
+        if !force,
+           dueAccounts.allSatisfy({ accountStates[$0.id]?.lastAttemptAt == nil }),
+           await isInitialSubscribedCodexBootstrapPending() {
+            return
+        }
+
+        let attemptAt = Date()
+        for account in dueAccounts {
+            updateAccountState(for: account.id) { state in
+                state.lastAttemptAt = attemptAt
+                if force || state.connectionStatus != .live {
+                    state.connectionStatus = .connecting
+                }
+            }
+        }
+
+        // Codex account switches only reliably converge after a fresh app-server
+        // session. Re-bootstrap by reconnecting instead of reusing the session.
         await codexClient.restart()
+    }
+
+    private func isInitialSubscribedCodexBootstrapPending() async -> Bool {
+        let liveState = await codexClient.currentState()
+        return liveState.status != .live && liveState.lastUpdateAt == nil
     }
 
     private func shouldRefresh(_ account: Account) -> Bool {

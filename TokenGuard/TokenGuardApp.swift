@@ -19,9 +19,11 @@ struct TokenGuardApp: App {
 
         let store = AccountStore()
         let keychain = KeychainManager()
+        let engine = UsagePollingEngine(accountStore: store, keychainManager: keychain)
+        engine.start()
         _accountStore = State(initialValue: store)
         _keychainManager = State(initialValue: keychain)
-        _pollingEngine = State(initialValue: UsagePollingEngine(accountStore: store, keychainManager: keychain))
+        _pollingEngine = State(initialValue: engine)
     }
 
     private var worstStatusMaxRatio: Double {
