@@ -11,6 +11,11 @@ private struct AntigravityAuthState: Sendable {
     let name: String?
 }
 
+private struct AntigravityRefreshedToken: Sendable {
+    let accessToken: String
+    let email: String?
+}
+
 private struct AntigravityAccount: Sendable {
     let email: String
     let isActive: Bool
@@ -69,7 +74,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func fetchUsage(account: Account, credential _: String) async throws -> UsageSnapshot {
-        let authState = try readAuthStateFromStateDb()
+        let authState = try await resolvedAuthState(readAuthStateFromStateDb())
         let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
         // Match this TokenGuard account's name (email) to the corresponding
@@ -135,7 +140,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
-        let authState = try readAuthStateFromStateDb()
+        let authState = try await resolvedAuthState(readAuthStateFromStateDb())
         guard let email = normalizedIdentity(authState.email) else {
             return nil
         }
@@ -340,6 +345,26 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    private func resolvedAuthState(_ authState: AntigravityAuthState) async throws -> AntigravityAuthState {
+        guard let refreshToken = authState.refreshToken else {
+            return authState
+        }
+
+        do {
+            let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
+            return AntigravityAuthState(
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshToken,
+                email: refreshed.email ?? authState.email,
+                name: authState.name
+            )
+        } catch ServiceProviderError.unauthorized {
+            throw ServiceProviderError.unauthorized
+        } catch {
+            return authState
+        }
+    }
+
     private func fetchModelsFromAPI(authState: AntigravityAuthState) async throws -> [String: [String: Any]] {
         do {
             return try await fetchModelsFromAPI(accessToken: authState.accessToken)
@@ -348,7 +373,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
                 throw ServiceProviderError.unauthorized
             }
             let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
-            return try await fetchModelsFromAPI(accessToken: refreshed)
+            return try await fetchModelsFromAPI(accessToken: refreshed.accessToken)
         }
     }
 
@@ -396,7 +421,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         return ProviderSupport.string(root["cloudaicompanionProject"])
     }
 
-    private func refreshAccessToken(refreshToken: String) async throws -> String {
+    private func refreshAccessToken(refreshToken: String) async throws -> AntigravityRefreshedToken {
         let requestBody = [
             "client_id": Self.oauthClientID,
             "client_secret": Self.oauthClientSecret,
@@ -420,7 +445,34 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         guard let accessToken = ProviderSupport.string(root["access_token"]), !accessToken.isEmpty else {
             throw ServiceProviderError.invalidPayload("Antigravity OAuth refresh did not return an access token.")
         }
-        return accessToken
+        let email = ProviderSupport.string(root["email"])
+            ?? ProviderSupport.string(root["user_email"])
+            ?? parseEmailFromIDToken(ProviderSupport.string(root["id_token"]))
+        return AntigravityRefreshedToken(
+            accessToken: accessToken,
+            email: normalizedIdentity(email)
+        )
+    }
+
+    private func parseEmailFromIDToken(_ idToken: String?) -> String? {
+        guard let idToken else { return nil }
+        let segments = idToken.split(separator: ".")
+        guard segments.count >= 2 else { return nil }
+
+        var payload = String(segments[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = payload.count % 4
+        if remainder != 0 {
+            payload.append(String(repeating: "=", count: 4 - remainder))
+        }
+
+        guard let data = Data(base64Encoded: payload),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+
+        return ProviderSupport.string(root["email"])
     }
 
     private func readUnifiedOAuthState(from db: OpaquePointer?) throws -> (accessToken: String, refreshToken: String?)? {

@@ -75,6 +75,21 @@ final class AntigravityProviderTests: XCTestCase {
         return data
     }
 
+    private func base64URLEncodedJSON(_ object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return data
+            .base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private func makeIDToken(email: String) throws -> String {
+        let header = try base64URLEncodedJSON(["alg": "none", "typ": "JWT"])
+        let payload = try base64URLEncodedJSON(["email": email])
+        return "\(header).\(payload).signature"
+    }
+
     private func makeUnifiedStateDb(
         in directory: URL,
         accessToken: String,
@@ -510,5 +525,128 @@ final class AntigravityProviderTests: XCTestCase {
 
         XCTAssertEqual(identity?.email, "spaces@example.com")
         XCTAssertNil(identity?.externalID)
+    }
+
+    func testCurrentConsumerIdentityPrefersEmailFromRefreshTokenIDTokenWhenUserStatusIsStale() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeUnifiedStateDb(
+            in: tempDir,
+            accessToken: "ya29.stale",
+            refreshToken: "refresh.stale",
+            email: "old@example.com",
+            name: "Old User"
+        )
+
+        let session = makeMockedSession()
+        let refreshedIDToken = try makeIDToken(email: "new@example.com")
+        URLProtocolMock.requestHandler = { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
+
+            if url.host == "oauth2.googleapis.com" {
+                let body = antigravityJsonData([
+                    "access_token": "ya29.refreshed",
+                    "expires_in": 3600,
+                    "token_type": "Bearer",
+                    "id_token": refreshedIDToken
+                ])
+                return antigravityHttpOK(data: body, for: url)
+            }
+
+            throw URLError(.badServerResponse)
+        }
+
+        let provider = AntigravityProvider(
+            stateDbURL: stateDbURL,
+            session: session
+        )
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "new@example.com")
+        XCTAssertNil(identity?.externalID)
+    }
+
+    func testFetchUsagePrefersEmailFromRefreshTokenIDTokenWhenUserStatusIsStale() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeUnifiedStateDb(
+            in: tempDir,
+            accessToken: "ya29.stale",
+            refreshToken: "refresh.stale",
+            email: "old@example.com",
+            name: "Old User"
+        )
+        let apiURL = URL(string: "https://cloudcode-pa.googleapis.com")!
+
+        let session = makeMockedSession()
+        let refreshedIDToken = try makeIDToken(email: "new@example.com")
+        URLProtocolMock.requestHandler = { request in
+            guard let url = request.url else {
+                throw URLError(.badURL)
+            }
+
+            if url.host == "oauth2.googleapis.com" {
+                let body = antigravityJsonData([
+                    "access_token": "ya29.refreshed",
+                    "expires_in": 3600,
+                    "token_type": "Bearer",
+                    "id_token": refreshedIDToken
+                ])
+                return antigravityHttpOK(data: body, for: url)
+            }
+
+            if url.host == apiURL.host, url.path == "/v1internal:loadCodeAssist" {
+                let body = antigravityJsonData([
+                    "cloudaicompanionProject": "projects/test-project"
+                ])
+                return antigravityHttpOK(data: body, for: url)
+            }
+
+            if url.host == apiURL.host, url.path == "/v1internal:fetchAvailableModels" {
+                let body = antigravityJsonData([
+                    "models": [
+                        "gemini-3-flash": [
+                            "quotaInfo": [
+                                "remainingFraction": 0.8,
+                                "resetTime": "2026-04-07T00:00:00Z"
+                            ]
+                        ]
+                    ]
+                ])
+                return antigravityHttpOK(data: body, for: url)
+            }
+
+            throw URLError(.badServerResponse)
+        }
+
+        let provider = AntigravityProvider(
+            stateDbURL: stateDbURL,
+            cloudCodeBaseURL: apiURL,
+            session: session
+        )
+
+        let account = Account(
+            name: "old@example.com",
+            serviceType: .antigravity,
+            credentialRef: "ref",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "old@example.com"
+            ]
+        )
+
+        let snapshot = try await provider.fetchUsage(account: account, credential: "")
+
+        XCTAssertEqual(snapshot.tier, "new@example.com")
+        XCTAssertEqual(snapshot.windows.first?.used ?? -1, 20, accuracy: 1)
     }
 }
