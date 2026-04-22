@@ -95,7 +95,8 @@ final class AntigravityProviderTests: XCTestCase {
         accessToken: String,
         refreshToken: String? = nil,
         email: String,
-        name: String
+        name: String,
+        profileURL: String? = nil
     ) throws -> URL {
         let dbURL = directory.appendingPathComponent("state.vscdb")
         var db: OpaquePointer?
@@ -108,15 +109,24 @@ final class AntigravityProviderTests: XCTestCase {
         try executeSQL("CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT)", on: db)
 
         var oauthInfo = protobufField(number: 1, payload: Data(accessToken.utf8))
+        oauthInfo.append(protobufField(number: 2, payload: Data("Bearer".utf8)))
         if let refreshToken {
             oauthInfo.append(protobufField(number: 3, payload: Data(refreshToken.utf8)))
         }
-        let oauthToken = protobufField(
+        let oauthTokenInfo = protobufField(
             number: 1,
-            payload: protobufField(
+            payload: Data("oauthTokenInfoSentinelKey".utf8)
+        ) + protobufField(
+            number: 2,
+            payload: protobufField(number: 1, payload: Data(Data(oauthInfo).base64EncodedString().utf8))
+        )
+        let oauthToken = (
+            protobufField(number: 1, payload: Data("authStateWithContextSentinelKey".utf8)) +
+            protobufField(
                 number: 2,
-                payload: protobufField(number: 1, payload: Data(Data(oauthInfo).base64EncodedString().utf8))
-            )
+                payload: protobufField(number: 1, payload: Data(#"{"state":"signedIn"}"#.utf8))
+            ) +
+            protobufField(number: 1, payload: oauthTokenInfo)
         ).base64EncodedString()
 
         let nestedProfile = Data("\(name):\u{0014}\(email)".utf8).base64EncodedString()
@@ -126,6 +136,10 @@ final class AntigravityProviderTests: XCTestCase {
         let insertUserStatusSQL = "INSERT INTO ItemTable (key, value) VALUES ('antigravityUnifiedStateSync.userStatus', '\(userStatus)')"
         try executeSQL(insertOAuthSQL, on: db)
         try executeSQL(insertUserStatusSQL, on: db)
+        if let profileURL {
+            let insertProfileSQL = "INSERT INTO ItemTable (key, value) VALUES ('antigravity.profileUrl', '\(profileURL)')"
+            try executeSQL(insertProfileSQL, on: db)
+        }
 
         return dbURL
     }
@@ -527,7 +541,7 @@ final class AntigravityProviderTests: XCTestCase {
         XCTAssertNil(identity?.externalID)
     }
 
-    func testCurrentConsumerIdentityPrefersEmailFromRefreshTokenIDTokenWhenUserStatusIsStale() async throws {
+    func testCurrentConsumerIdentityPrefersCurrentUserStatusOverStaleRefreshTokenIdentity() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -535,44 +549,22 @@ final class AntigravityProviderTests: XCTestCase {
 
         let stateDbURL = try makeUnifiedStateDb(
             in: tempDir,
-            accessToken: "ya29.stale",
+            accessToken: "ya29.current",
             refreshToken: "refresh.stale",
-            email: "old@example.com",
-            name: "Old User"
+            email: "nested@example.com",
+            name: "Nested User",
+            profileURL: "https://lh3.googleusercontent.com/a/work-profile=s96-c"
         )
 
-        let session = makeMockedSession()
-        let refreshedIDToken = try makeIDToken(email: "new@example.com")
-        URLProtocolMock.requestHandler = { request in
-            guard let url = request.url else {
-                throw URLError(.badURL)
-            }
-
-            if url.host == "oauth2.googleapis.com" {
-                let body = antigravityJsonData([
-                    "access_token": "ya29.refreshed",
-                    "expires_in": 3600,
-                    "token_type": "Bearer",
-                    "id_token": refreshedIDToken
-                ])
-                return antigravityHttpOK(data: body, for: url)
-            }
-
-            throw URLError(.badServerResponse)
-        }
-
-        let provider = AntigravityProvider(
-            stateDbURL: stateDbURL,
-            session: session
-        )
+        let provider = AntigravityProvider(stateDbURL: stateDbURL)
 
         let identity = try await provider.currentConsumerIdentity()
 
-        XCTAssertEqual(identity?.email, "new@example.com")
+        XCTAssertEqual(identity?.email, "nested@example.com")
         XCTAssertNil(identity?.externalID)
     }
 
-    func testFetchUsagePrefersEmailFromRefreshTokenIDTokenWhenUserStatusIsStale() async throws {
+    func testFetchUsageUsesCurrentAccessTokenBeforeRefreshingStaleRefreshTokenIdentity() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -580,31 +572,26 @@ final class AntigravityProviderTests: XCTestCase {
 
         let stateDbURL = try makeUnifiedStateDb(
             in: tempDir,
-            accessToken: "ya29.stale",
+            accessToken: "ya29.current",
             refreshToken: "refresh.stale",
-            email: "old@example.com",
-            name: "Old User"
+            email: "nested@example.com",
+            name: "Nested User"
         )
         let apiURL = URL(string: "https://cloudcode-pa.googleapis.com")!
 
         let session = makeMockedSession()
-        let refreshedIDToken = try makeIDToken(email: "new@example.com")
         URLProtocolMock.requestHandler = { request in
             guard let url = request.url else {
                 throw URLError(.badURL)
             }
 
             if url.host == "oauth2.googleapis.com" {
-                let body = antigravityJsonData([
-                    "access_token": "ya29.refreshed",
-                    "expires_in": 3600,
-                    "token_type": "Bearer",
-                    "id_token": refreshedIDToken
-                ])
-                return antigravityHttpOK(data: body, for: url)
+                XCTFail("fetchUsage should use the current access token before refreshing OAuth")
+                throw URLError(.badServerResponse)
             }
 
             if url.host == apiURL.host, url.path == "/v1internal:loadCodeAssist" {
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ya29.current")
                 let body = antigravityJsonData([
                     "cloudaicompanionProject": "projects/test-project"
                 ])
@@ -612,6 +599,7 @@ final class AntigravityProviderTests: XCTestCase {
             }
 
             if url.host == apiURL.host, url.path == "/v1internal:fetchAvailableModels" {
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer ya29.current")
                 let body = antigravityJsonData([
                     "models": [
                         "gemini-3-flash": [
@@ -635,18 +623,18 @@ final class AntigravityProviderTests: XCTestCase {
         )
 
         let account = Account(
-            name: "old@example.com",
+            name: "nested@example.com",
             serviceType: .antigravity,
             credentialRef: "ref",
             configuration: [
                 Account.ConfigurationKey.planType: "consumer",
-                Account.ConfigurationKey.consumerEmail: "old@example.com"
+                Account.ConfigurationKey.consumerEmail: "nested@example.com"
             ]
         )
 
         let snapshot = try await provider.fetchUsage(account: account, credential: "")
 
-        XCTAssertEqual(snapshot.tier, "new@example.com")
+        XCTAssertEqual(snapshot.tier, "nested@example.com")
         XCTAssertEqual(snapshot.windows.first?.used ?? -1, 20, accuracy: 1)
     }
 }

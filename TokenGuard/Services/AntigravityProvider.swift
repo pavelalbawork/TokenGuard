@@ -74,7 +74,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func fetchUsage(account: Account, credential _: String) async throws -> UsageSnapshot {
-        let authState = try await resolvedAuthState(readAuthStateFromStateDb())
+        let authState = try readAuthStateFromStateDb()
         let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
         // Match this TokenGuard account's name (email) to the corresponding
@@ -140,10 +140,22 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
-        let authState = try await resolvedAuthState(readAuthStateFromStateDb())
-        guard let email = normalizedIdentity(authState.email) else {
+        guard let db = try? openStateDatabase() else {
             return nil
         }
+        defer { sqlite3_close(db) }
+
+        if let email = normalizedIdentity(readEmailFromUserStatus(db: db)) {
+            // `antigravity.profileUrl` lags across account switches in live installs,
+            // so use the signed-in email as the stable consumer identity.
+            return ConsumerAccountIdentity(email: email, externalID: nil)
+        }
+
+        guard let legacyState = try? readLegacyAuthState(from: db),
+              let email = normalizedIdentity(legacyState.email) else {
+            return nil
+        }
+
         return ConsumerAccountIdentity(email: email, externalID: nil)
     }
 
@@ -173,48 +185,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             )
         }
 
-        // Legacy fallback: antigravityAuthStatus JSON key (older Antigravity versions).
-        var stmt: OpaquePointer?
-        let sql = "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus'"
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            throw ServiceProviderError.unavailable(
-                "Could not query Antigravity editor database. Error: \(String(cString: sqlite3_errmsg(db)))"
-            )
-        }
-        defer { sqlite3_finalize(stmt) }
-
-        guard sqlite3_step(stmt) == SQLITE_ROW, let valuePtr = sqlite3_column_text(stmt, 0) else {
-            throw ServiceProviderError.unavailable(
-                "Antigravity editor has no auth status. Open Antigravity and sign in."
-            )
-        }
-
-        let json = String(cString: valuePtr)
-        guard
-            let data = json.data(using: .utf8),
-            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
-            throw ServiceProviderError.unavailable(
-                "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
-            )
-        }
-
-        let apiKey = ProviderSupport.string(root["apiKey"])
-            ?? ProviderSupport.string(root["accessToken"])
-            ?? ProviderSupport.string(root["token"])
-
-        guard let apiKey, !apiKey.isEmpty else {
-            throw ServiceProviderError.unavailable(
-                "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
-            )
-        }
-
-        return AntigravityAuthState(
-            accessToken: apiKey,
-            refreshToken: nil,
-            email: ProviderSupport.string(root["email"]),
-            name: ProviderSupport.string(root["name"])
-        )
+        return try readLegacyAuthState(from: db)
     }
 
     /// Reads the signed-in user's email from `antigravityUnifiedStateSync.userStatus` (protobuf).
@@ -286,14 +257,15 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         // immediately after Antigravity switches accounts. Immutable mode can read
         // stale main-db pages when recent auth state is still in the WAL file.
         for attempt in [
-            (label: "read-only", query: "mode=ro"),
-            (label: "immutable", query: "immutable=1")
+            (label: "read-only", query: "mode=ro", flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_URI),
+            (label: "read-write", query: "mode=rw", flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI),
+            (label: "immutable", query: "immutable=1", flags: SQLITE_OPEN_READONLY | SQLITE_OPEN_URI)
         ] {
             var db: OpaquePointer?
             let result = sqlite3_open_v2(
                 stateDbURI(query: attempt.query),
                 &db,
-                SQLITE_OPEN_READONLY | SQLITE_OPEN_URI,
+                attempt.flags,
                 nil
             )
 
@@ -343,26 +315,6 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func resolvedAuthState(_ authState: AntigravityAuthState) async throws -> AntigravityAuthState {
-        guard let refreshToken = authState.refreshToken else {
-            return authState
-        }
-
-        do {
-            let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
-            return AntigravityAuthState(
-                accessToken: refreshed.accessToken,
-                refreshToken: refreshToken,
-                email: refreshed.email ?? authState.email,
-                name: authState.name
-            )
-        } catch ServiceProviderError.unauthorized {
-            throw ServiceProviderError.unauthorized
-        } catch {
-            return authState
-        }
     }
 
     private func fetchModelsFromAPI(authState: AntigravityAuthState) async throws -> [String: [String: Any]] {
@@ -476,32 +428,90 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     private func readUnifiedOAuthState(from db: OpaquePointer?) throws -> (accessToken: String, refreshToken: String?)? {
+        for payload in decodedPayloads(forKey: "antigravityUnifiedStateSync.oauthToken", db: db) {
+            if let accessToken = oauthAccessToken(in: payload) {
+                return (
+                    accessToken,
+                    oauthRefreshToken(in: payload)
+                )
+            }
+        }
+        return nil
+    }
+
+    private func readLegacyAuthState(from db: OpaquePointer?) throws -> AntigravityAuthState {
         var stmt: OpaquePointer?
-        let sql = "SELECT value FROM ItemTable WHERE key = 'antigravityUnifiedStateSync.oauthToken'"
+        let sql = "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus'"
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-            return nil
+            throw ServiceProviderError.unavailable(
+                "Could not query Antigravity editor database. Error: \(String(cString: sqlite3_errmsg(db)))"
+            )
         }
         defer { sqlite3_finalize(stmt) }
 
         guard sqlite3_step(stmt) == SQLITE_ROW, let valuePtr = sqlite3_column_text(stmt, 0) else {
-            return nil
+            throw ServiceProviderError.unavailable(
+                "Antigravity editor has no auth status. Open Antigravity and sign in."
+            )
         }
 
-        let encoded = String(cString: valuePtr)
-        guard let data = Data(base64Encoded: encoded),
-              let inner = protobufField(1, in: data),
-              let inner2 = protobufField(2, in: inner),
-              let oauthInfoB64Data = protobufField(1, in: inner2),
-              let oauthInfoB64 = String(data: oauthInfoB64Data, encoding: .utf8),
-              let oauthInfo = Data(base64Encoded: oauthInfoB64),
-              let accessTokenData = protobufField(1, in: oauthInfo),
-              let accessToken = String(data: accessTokenData, encoding: .utf8)
+        let json = String(cString: valuePtr)
+        guard
+            let data = json.data(using: .utf8),
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
-            return nil
+            throw ServiceProviderError.unavailable(
+                "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
+            )
         }
 
-        let refreshToken = protobufField(3, in: oauthInfo).flatMap { String(data: $0, encoding: .utf8) }
-        return (accessToken, refreshToken)
+        let apiKey = ProviderSupport.string(root["apiKey"])
+            ?? ProviderSupport.string(root["accessToken"])
+            ?? ProviderSupport.string(root["token"])
+
+        guard let apiKey, !apiKey.isEmpty else {
+            throw ServiceProviderError.unavailable(
+                "Could not read access token from Antigravity editor. Try signing in to Antigravity again."
+            )
+        }
+
+        return AntigravityAuthState(
+            accessToken: apiKey,
+            refreshToken: nil,
+            email: ProviderSupport.string(root["email"]),
+            name: ProviderSupport.string(root["name"])
+        )
+    }
+
+    private func oauthAccessToken(in payload: Data) -> String? {
+        if let tokenData = protobufField(1, in: payload),
+           let token = String(data: tokenData, encoding: .utf8),
+           token.hasPrefix("ya29.") {
+            return token
+        }
+
+        let text = String(decoding: payload, as: UTF8.self)
+        if let match = text.firstMatch(of: /ya29\.[A-Za-z0-9._-]+/) {
+            return String(match.output)
+        }
+
+        return nil
+    }
+
+    private func oauthRefreshToken(in payload: Data) -> String? {
+        if let tokenData = protobufField(3, in: payload),
+           let token = String(data: tokenData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !token.isEmpty {
+            return token
+        }
+
+        let text = String(decoding: payload, as: UTF8.self)
+        if let match = text.firstMatch(of: /1\/\/[A-Za-z0-9._-]+/) {
+            return String(match.output)
+        }
+
+        return nil
     }
 
     private func protobufField(_ fieldNumber: Int, in data: Data) -> Data? {
@@ -536,7 +546,11 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     private func decodedUserStatusPayloads(db: OpaquePointer?) -> [Data] {
-        guard let raw = readItemTableValue(db: db, key: "antigravityUnifiedStateSync.userStatus"),
+        decodedPayloads(forKey: "antigravityUnifiedStateSync.userStatus", db: db)
+    }
+
+    private func decodedPayloads(forKey key: String, db: OpaquePointer?) -> [Data] {
+        guard let raw = readItemTableValue(db: db, key: key),
               let outer = Data(base64Encoded: raw) else {
             return []
         }
