@@ -432,7 +432,7 @@ final class OpenAIProviderTests: XCTestCase {
         XCTAssertTrue(sawReconnect)
     }
 
-    func testCodexClientRestartClearsIdentityUntilNewBootstrap() async throws {
+    func testCodexClientRestartClearsLiveStateUntilNewBootstrap() async throws {
         final class SessionSequence: @unchecked Sendable {
             private let lock = NSLock()
             private var index = 0
@@ -490,8 +490,8 @@ final class OpenAIProviderTests: XCTestCase {
         for _ in 0..<50 {
             let state = await client.currentState()
             if state.identity == nil,
-               state.snapshot?.windows.first?.used == 32,
-               state.status != .live {
+               state.snapshot == nil,
+               state.status == .connecting {
                 sawClearedIdentity = true
                 break
             }

@@ -529,9 +529,9 @@ actor CodexAppServerClient: CodexLiveStateProviding {
 
     private func prepareForReconnect() {
         state = CodexLiveState(
-            snapshot: state.snapshot,
+            snapshot: nil,
             identity: nil,
-            status: state.snapshot == nil ? .connecting : .staleFallback,
+            status: .connecting,
             lastUpdateAt: state.lastUpdateAt,
             lastErrorText: nil
         )
