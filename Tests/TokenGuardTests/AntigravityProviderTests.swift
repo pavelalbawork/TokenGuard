@@ -489,4 +489,26 @@ final class AntigravityProviderTests: XCTestCase {
         XCTAssertEqual(identity?.email, "nested@example.com")
         XCTAssertNil(identity?.externalID)
     }
+
+    func testCurrentConsumerIdentityReadsUnifiedStateFromDatabasePathWithSpaces() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Antigravity Provider Tests")
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let stateDbURL = try makeUnifiedStateDb(
+            in: tempDir,
+            accessToken: "ya29.spaces",
+            refreshToken: "refresh.spaces",
+            email: "spaces@example.com",
+            name: "Space User"
+        )
+        let provider = AntigravityProvider(stateDbURL: stateDbURL)
+
+        let identity = try await provider.currentConsumerIdentity()
+
+        XCTAssertEqual(identity?.email, "spaces@example.com")
+        XCTAssertNil(identity?.externalID)
+    }
 }

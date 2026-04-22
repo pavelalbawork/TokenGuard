@@ -294,7 +294,15 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
 
             if result == SQLITE_OK {
                 sqlite3_busy_timeout(db, 1_000)
-                return db
+                do {
+                    try validateReadableStateDatabase(db)
+                    return db
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    errors.append("\(attempt.label): \(message)")
+                    sqlite3_close(db)
+                    continue
+                }
             }
 
             let message = db.map { String(cString: sqlite3_errmsg($0)) } ?? "unknown SQLite error"
@@ -307,10 +315,23 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         )
     }
 
+    private func validateReadableStateDatabase(_ db: OpaquePointer?) throws {
+        var stmt: OpaquePointer?
+        let sql = "SELECT value FROM ItemTable LIMIT 1"
+        let result = sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+
+        guard result == SQLITE_OK else {
+            throw ServiceProviderError.unavailable(
+                "Could not query Antigravity editor database. Error: \(String(cString: sqlite3_errmsg(db)))"
+            )
+        }
+    }
+
     private func stateDbURI(query: String) -> String {
-        let encoded = stateDbURL.path
-            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? stateDbURL.path
-        return "file:\(encoded)?\(query)"
+        var components = URLComponents(url: stateDbURL.standardizedFileURL, resolvingAgainstBaseURL: false)
+        components?.percentEncodedQuery = query
+        return components?.string ?? stateDbURL.standardizedFileURL.absoluteString
     }
 
     private func normalizedIdentity(_ value: String?) -> String? {
