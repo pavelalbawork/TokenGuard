@@ -98,22 +98,24 @@ final class UsagePollingEngine {
     func start() {
         guard pollingTask == nil else { return }
 
-        codexUpdatesTask = Task { [weak self] in
-            guard let self else { return }
-            await self.codexClient.start()
-            let updates = await self.codexClient.updates()
-            for await state in updates {
-                await self.handleCodexLiveState(state)
+        if codexUpdatesTask == nil {
+            codexUpdatesTask = Task { [weak self] in
+                guard let self else { return }
+                await self.codexClient.start()
+                let updates = await self.codexClient.updates()
+                for await state in updates {
+                    await self.handleCodexLiveState(state)
+                }
             }
         }
 
-        pollingTask = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                await self.refreshAll(force: false)
-                await self.sleep(self.pollCadence)
-            }
-        }
+        startPollingLoop()
+    }
+
+    func restartPollingLoop() {
+        guard pollingTask != nil else { return }
+        pollingTask?.cancel()
+        startPollingLoop()
     }
 
     func stop() {
@@ -122,6 +124,16 @@ final class UsagePollingEngine {
         codexUpdatesTask?.cancel()
         codexUpdatesTask = nil
         Task { await codexClient.stop() }
+    }
+
+    private func startPollingLoop() {
+        pollingTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await self.refreshAll(force: false)
+                await self.sleep(self.pollCadence)
+            }
+        }
     }
 
     func refreshAll(force: Bool = true) async {

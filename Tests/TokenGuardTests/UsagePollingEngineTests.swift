@@ -843,6 +843,114 @@ final class UsagePollingEngineTests: XCTestCase {
         XCTAssertEqual(engine.pollCadence, 900)
     }
 
+    func testRestartPollingLoopAppliesUpdatedGlobalRefreshIntervalImmediately() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "gemini@example.com",
+            serviceType: .gemini,
+            credentialRef: "gemini-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer"
+            ]
+        )
+        try accountStore.add(account)
+
+        let snapshot = UsageSnapshot(
+            accountId: account.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 4, limit: 10, unit: .requests, resetDate: nil, label: "Gemini 2.5 Pro")
+            ],
+            tier: "Gemini Code Assist"
+        )
+        let provider = MockConsumerIdentityProvider(
+            serviceType: .gemini,
+            identity: ConsumerAccountIdentity(email: "gemini@example.com", externalID: nil),
+            snapshot: snapshot
+        )
+
+        final class RefreshIntervalBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value: TimeInterval?
+
+            init(_ value: TimeInterval?) {
+                self.value = value
+            }
+
+            func get() -> TimeInterval? {
+                lock.lock()
+                defer { lock.unlock() }
+                return value
+            }
+
+            func set(_ newValue: TimeInterval?) {
+                lock.lock()
+                value = newValue
+                lock.unlock()
+            }
+        }
+
+        final class SleepRecorder: @unchecked Sendable {
+            private let lock = NSLock()
+            private var intervals: [TimeInterval] = []
+
+            func record(_ interval: TimeInterval) {
+                lock.lock()
+                intervals.append(interval)
+                lock.unlock()
+            }
+
+            func values() -> [TimeInterval] {
+                lock.lock()
+                defer { lock.unlock() }
+                return intervals
+            }
+        }
+
+        let refreshInterval = RefreshIntervalBox(900)
+        let sleepRecorder = SleepRecorder()
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.gemini: provider],
+            serviceRefreshIntervals: [.gemini: 60],
+            refreshIntervalProvider: { refreshInterval.get() },
+            sleep: { interval in
+                sleepRecorder.record(interval)
+                do {
+                    try await Task.sleep(nanoseconds: 10_000_000_000)
+                } catch {
+                    return
+                }
+            }
+        )
+        defer { engine.stop() }
+
+        engine.start()
+
+        let sawInitialSleep = await waitUntil(timeout: 2) {
+            sleepRecorder.values() == [900]
+        }
+        XCTAssertTrue(sawInitialSleep)
+
+        refreshInterval.set(60)
+        engine.restartPollingLoop()
+
+        let sawUpdatedSleep = await waitUntil(timeout: 2) {
+            Array(sleepRecorder.values().suffix(2)) == [900, 60]
+        }
+        XCTAssertTrue(sawUpdatedSleep)
+    }
+
     func testLoadsCachedSnapshotAndMarksItStaleOnRefreshFailure() async throws {
         let tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

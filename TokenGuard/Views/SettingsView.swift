@@ -3,6 +3,7 @@ import ServiceManagement
 
 struct SettingsView: View {
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(UsagePollingEngine.self) private var pollingEngine
     
     @AppStorage("providerOrderStr") private var providerOrderStr: String = "codex,claude,gemini,antigravity,custom"
     @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
@@ -27,28 +28,13 @@ struct SettingsView: View {
             }
 
             // Section: Appearance
-            VStack(alignment: .leading, spacing: 8) {
-                sectionHeader("Appearance", theme: theme)
-
-                HStack {
-                    Text("Theme")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-                    Spacer()
-                    Picker("", selection: $bindableThemeManager.selectedThemeId) {
-                        ForEach(Theme.all) { item in
-                            Text(item.name).tag(item.id)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    .accessibilityLabel("Theme")
-                }
-                .padding(10)
-                .background(settingsRowBackground(for: theme))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
+            VStack(alignment: .leading, spacing: 12) {
+                Text("THEME")
+                    .font(.system(size: 10, weight: .black))
+                    .tracking(1.5)
+                    .foregroundStyle(theme.textSecondary)
+                
+                ThemeSelectorView(themeManager: bindableThemeManager)
             }
 
             // Section: Startup
@@ -118,6 +104,9 @@ struct SettingsView: View {
                 .background(settingsRowBackground(for: theme))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(settingsBorder(for: theme), lineWidth: 1))
+                .onChange(of: refreshIntervalMins) { _, _ in
+                    pollingEngine.restartPollingLoop()
+                }
             }
             
             // Section: Provider Order
@@ -237,5 +226,118 @@ struct SettingsView: View {
 
     private func settingsBorder(for theme: Theme) -> Color {
         theme.isLight ? theme.border.opacity(0.85) : theme.border
+    }
+}
+
+struct ThemeSelectorView: View {
+    @Bindable var themeManager: ThemeManager
+    
+    let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+    
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(Theme.all) { theme in
+                ThemeCardView(theme: theme, isSelected: themeManager.selectedThemeId == theme.id)
+                    .onTapGesture {
+                        themeManager.selectedThemeId = theme.id
+                    }
+            }
+        }
+    }
+}
+
+struct ThemeCardView: View {
+    let theme: Theme
+    let isSelected: Bool
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Preview Area
+            VStack(alignment: .leading, spacing: 12) {
+                // Top Bar Mock
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(theme.primaryAccent)
+                        .frame(width: 6, height: 6)
+                    
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(theme.surfaceContainerHigh)
+                            .frame(height: 4)
+                        Capsule()
+                            .fill(theme.primaryAccent)
+                            .frame(width: 40, height: 4)
+                    }
+                    
+                    Spacer()
+                }
+                
+                HStack(spacing: 12) {
+                    // Icon Mock
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(theme.surfaceContainerHigh)
+                            .frame(width: 24, height: 24)
+                        Circle()
+                            .strokeBorder(theme.primaryAccent, lineWidth: 2)
+                            .frame(width: 12, height: 12)
+                    }
+                    
+                    // Text Lines Mock
+                    VStack(alignment: .leading, spacing: 6) {
+                        Capsule()
+                            .fill(theme.textPrimary)
+                            .frame(width: 60, height: 3)
+                        Capsule()
+                            .fill(theme.textSecondary)
+                            .frame(width: 80, height: 3)
+                    }
+                }
+                
+                // Bottom Pills Mock
+                HStack(spacing: 6) {
+                    Spacer()
+                    Capsule()
+                        .fill(theme.primaryAccent)
+                        .frame(width: 40, height: 4)
+                    Capsule()
+                        .fill(theme.secondaryAccent)
+                        .frame(width: 40, height: 4)
+                }
+                .padding(.top, 4)
+            }
+            .padding(12)
+            .background(theme.backgroundMain)
+            
+            // Info Area
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(theme.name)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                    Text(theme.tagline)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.secondary)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(theme.primaryAccent)
+                }
+            }
+            .padding(10)
+            .background(Color(NSColor.controlBackgroundColor)) // Adaptive native background for info area
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? theme.primaryAccent : Color.secondary.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+        )
+        .contentShape(Rectangle())
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
