@@ -1,0 +1,7 @@
+---
+description: "Code Review"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.md", "**/*.toml"]
+alwaysApply: false
+---
+
+When reviewing code, lead with concrete findings ordered by severity. Check correctness, regressions, tests, maintainability, and security-sensitive risks. Separate blockers from suggestions.

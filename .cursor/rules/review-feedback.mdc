@@ -1,0 +1,7 @@
+---
+description: "Review Feedback"
+globs: ["**/*.md", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.toml"]
+alwaysApply: false
+---
+
+Before applying review feedback, verify each claim against the codebase. Accept blockers and justified improvements; reject incorrect, preference-only, or out-of-scope feedback with evidence.

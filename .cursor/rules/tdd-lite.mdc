@@ -1,0 +1,7 @@
+---
+description: "TDD Lite"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py"]
+alwaysApply: false
+---
+
+Use tests-first for regressions and stable public behavior changes: write a failing external-behavior test, confirm it fails, implement the smallest passing change, then refactor if needed. Do not force TDD on trivial edits.

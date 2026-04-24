@@ -1,0 +1,7 @@
+---
+description: "Issue Slicer"
+globs: ["**/*.md"]
+alwaysApply: false
+---
+
+Break PRDs or briefs into vertical, independently grabbable slices with acceptance criteria, blockers, decision needs, and expected evidence. Draft first; create issues only when asked.

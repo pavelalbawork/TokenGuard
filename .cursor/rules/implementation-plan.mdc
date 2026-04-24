@@ -1,0 +1,7 @@
+---
+description: "Implementation Plan"
+globs: ["**/*.md", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py"]
+alwaysApply: false
+---
+
+For substantial implementation plans, include objective, acceptance criteria, compact execution packets, critical path, sequencing, and fan-out opportunities. Use Work Packets for copy-paste-ready multi-tool packets.

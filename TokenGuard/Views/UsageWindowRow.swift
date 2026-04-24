@@ -11,8 +11,8 @@ struct UsageWindowRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .bottom) {
                 Text(window.label ?? window.windowType.defaultLabel)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.id == "luminous" ? theme.textPrimary : theme.textSecondary.opacity(theme.isLight ? 0.88 : 1.0))
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
 
                 Spacer()
 
@@ -24,7 +24,7 @@ struct UsageWindowRow: View {
                     }
                     
                     Text(valueText)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundStyle(valueColor)
                 }
             }
@@ -38,7 +38,11 @@ struct UsageWindowRow: View {
     }
 
     private var valueColor: Color {
-        themeManager.currentTheme.textPrimary
+        let theme = themeManager.currentTheme
+        if theme.id == "luminous" {
+            return theme.primaryAccent
+        }
+        return serviceType?.tintColor(for: theme) ?? theme.primaryAccent
     }
 
     private var accessibilityLabel: String {

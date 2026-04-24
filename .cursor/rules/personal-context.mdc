@@ -1,0 +1,7 @@
+---
+description: "Personal Context"
+globs: ["**/*"]
+alwaysApply: false
+---
+
+Allow more exploration in personal work, but keep project-local runtime behavior visible.

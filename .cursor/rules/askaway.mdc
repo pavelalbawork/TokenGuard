@@ -1,0 +1,11 @@
+---
+description: "Askaway"
+globs: ["**/*.md", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.toml"]
+alwaysApply: false
+---
+
+Use `/askaway` to interview the user about a plan, design, strategy, architecture, or implementation choice until shared understanding is reached. Live-conversation executor for `clarify-on-low-confidence` and `question-driven-choice-making` policies.
+Ask one question at a time. For each question, explain why it matters, provide your recommended answer, and state the assumption behind that recommendation.
+If the answer can be found by inspecting the codebase, project docs, existing files, or generated Toolbox surfaces, inspect those sources instead of asking.
+Walk down the decision tree branch by branch, resolving upstream dependencies before downstream questions.
+When done, summarize agreed decisions, unresolved risks, assumptions, and the recommended next action.

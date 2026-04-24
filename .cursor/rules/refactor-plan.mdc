@@ -1,0 +1,7 @@
+---
+description: "Refactor Plan"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.md"]
+alwaysApply: false
+---
+
+For risky refactors, define behavior that must not change, tiny safe steps, tests/checks after each step, rollback points, and explicit out-of-scope boundaries.

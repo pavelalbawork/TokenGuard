@@ -20,14 +20,7 @@ import SwiftUI
 
 extension ServiceType {
     func tintColor(for theme: Theme) -> Color {
-        if theme.id == "pastelDash" {
-            switch self {
-            case .codex: return theme.primaryAccent
-            case .claude: return theme.secondaryAccent
-            case .gemini: return theme.tertiaryAccent
-            case .antigravity: return theme.quaternaryAccent
-            }
-        } else if theme.id == "luminous" {
+        if theme.id == "luminous" {
             // Unified AIReady aesthetic: all providers use Orange as the main tracker color
             return theme.secondaryAccent
         } else {

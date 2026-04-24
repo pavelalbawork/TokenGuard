@@ -1,0 +1,7 @@
+---
+description: "Vibe Security Audit"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.sql", "**/*.toml", "**/*.json", "**/*.md"]
+alwaysApply: false
+---
+
+Run practical security audits for AI-generated web apps and automations. Modes: quick-scan, pre-deploy, full-checklist. Focus on secrets/env, auth middleware, server-side validation, RLS/storage policies, service role isolation, webhooks, uploads, rate limits, dependency risk, CORS boundaries, and error leaks. Do not run for small UI-only edits.

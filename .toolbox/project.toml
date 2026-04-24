@@ -1,0 +1,5 @@
+project_name = "TokenGuard"
+enabled_hosts = ["codex", "claude", "gemini", "cursor", "antigravity"]
+profiles = ["automation"]
+extra_packs = ["profile-engineering-craft"]
+disabled_packs = []

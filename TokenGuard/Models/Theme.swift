@@ -3,6 +3,7 @@ import SwiftUI
 public struct Theme: Identifiable, Equatable, Sendable {
     public let id: String
     public let name: String
+    public let tagline: String
     public let isLight: Bool
     
     // Backgrounds
@@ -25,9 +26,10 @@ public struct Theme: Identifiable, Equatable, Sendable {
     public let border: Color
     public let error: Color
     
-    public init(id: String, name: String, isLight: Bool = false, backgroundMain: Color, surface: Color, surfaceContainer: Color, surfaceContainerHigh: Color, textPrimary: Color, textSecondary: Color, primaryAccent: Color, secondaryAccent: Color, tertiaryAccent: Color, quaternaryAccent: Color? = nil, border: Color, error: Color) {
+    public init(id: String, name: String, tagline: String, isLight: Bool = false, backgroundMain: Color, surface: Color, surfaceContainer: Color, surfaceContainerHigh: Color, textPrimary: Color, textSecondary: Color, primaryAccent: Color, secondaryAccent: Color, tertiaryAccent: Color, quaternaryAccent: Color? = nil, border: Color, error: Color) {
         self.id = id
         self.name = name
+        self.tagline = tagline
         self.isLight = isLight
         self.backgroundMain = backgroundMain
         self.surface = surface
@@ -47,7 +49,8 @@ public struct Theme: Identifiable, Equatable, Sendable {
 extension Theme {
     public static let luminous = Theme(
         id: "luminous",
-        name: "Dark: AIReady Luminous",
+        name: "Luminous",
+        tagline: "AIReady boardroom",
         backgroundMain: Color(hex: "#0a0f1a"),
         surface: Color(hex: "#0a0f1a"),
         surfaceContainer: Color(hex: "#0d1220"),
@@ -64,7 +67,8 @@ extension Theme {
     
     public static let nordicFrost = Theme(
         id: "nordicFrost",
-        name: "Dark: Nordic Frost",
+        name: "Nordic Frost",
+        tagline: "Cool blue dark",
         backgroundMain: Color(hex: "#080e1a"),
         surface: Color(hex: "#080e1a"),
         surfaceContainer: Color(hex: "#0f172a"),
@@ -80,7 +84,8 @@ extension Theme {
 
     public static let obsidianSilver = Theme(
         id: "obsidianSilver",
-        name: "Dark: Obsidian Silver",
+        name: "Obsidian Silver",
+        tagline: "Pure high contrast",
         backgroundMain: Color(hex: "#0a0a0a"),
         surface: Color(hex: "#0a0a0a"),
         surfaceContainer: Color(hex: "#141414"),
@@ -96,7 +101,8 @@ extension Theme {
     
     public static let mintTerminal = Theme(
         id: "mintTerminal",
-        name: "Dark: Mint Terminal",
+        name: "Mint Terminal",
+        tagline: "Hacker green",
         backgroundMain: Color(hex: "#18181b"),
         surface: Color(hex: "#18181b"),
         surfaceContainer: Color(hex: "#27272a"),
@@ -114,7 +120,8 @@ extension Theme {
     
     public static let minimalLight = Theme(
         id: "minimalLight",
-        name: "Light: Clean Minimal",
+        name: "Clean Minimal",
+        tagline: "Bright monochrome",
         isLight: true,
         backgroundMain: Color(hex: "#ffffff"),
         surface: Color(hex: "#ffffff"),
@@ -128,28 +135,30 @@ extension Theme {
         border: Color(hex: "#b8b8b8"),
         error: Color(hex: "#d93025")
     )
+
     
-    public static let pastelDash = Theme(
-        id: "pastelDash",
-        name: "Light: Pastel Dash",
+    public static let paper = Theme(
+        id: "paper",
+        name: "Paper",
+        tagline: "Warm light · ink accent",
         isLight: true,
-        backgroundMain: Color(hex: "#e5e7eb"),     // Distinct light gray background
-        surface: Color(hex: "#ffffff"),            // Pure white cards
-        surfaceContainer: Color(hex: "#ffffff"),   // Pure white un-hovered cards
-        surfaceContainerHigh: Color(hex: "#f3f4f6"), // Very soft hover tint
-        textPrimary: Color(hex: "#1f2937"),        // Sharp dark slate text
-        textSecondary: Color(hex: "#6b7280"),      // Muted secondary text
-        primaryAccent: Color(hex: "#6B7AFA"),      // Soft purple/blue (Codex)
-        secondaryAccent: Color(hex: "#7FE5FA"),    // Light sky cyan (Claude)
-        tertiaryAccent: Color(hex: "#00C49A"),     // Viridian teal (Gemini)
-        quaternaryAccent: Color(hex: "#9AE692"),   // Lime green (AG)
-        border: Color(hex: "#d1d5db"),
-        error: Color(hex: "#ef4444")               // Standard red error
+        backgroundMain: Color(hex: "#f4efe6"),
+        surface: Color(hex: "#fbf7ee"),
+        surfaceContainer: Color(hex: "#fbf7ee"),
+        surfaceContainerHigh: Color(hex: "#f0e9d8"),
+        textPrimary: Color(hex: "#17140f"),
+        textSecondary: Color(hex: "#5e574a"),
+        primaryAccent: Color(hex: "#c85a2b"),
+        secondaryAccent: Color(hex: "#e07340"),
+        tertiaryAccent: Color(hex: "#2f6ea8"),
+        quaternaryAccent: Color(hex: "#3e8a52"),
+        border: Color(red: 20/255.0, green: 16/255.0, blue: 10/255.0, opacity: 0.14),
+        error: Color(hex: "#a8322b")
     )
     
     public static let all: [Theme] = [
         .nordicFrost, .luminous, .obsidianSilver, .mintTerminal,
-        .minimalLight, .pastelDash
+        .minimalLight, .paper
     ]
 }
 

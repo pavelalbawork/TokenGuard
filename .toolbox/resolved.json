@@ -1,0 +1,716 @@
+{
+  "project_name": "TokenGuard",
+  "project_path": "/Users/palba/Workspaces/Personal/Apps/TokenGuard",
+  "relative_path": "Personal/Apps/TokenGuard",
+  "top_key": "Personal",
+  "sub_key": "Personal/Apps",
+  "resolution_mode": "normal",
+  "folder_defaults": [
+    "base-core",
+    "personal-core",
+    "personal-apps"
+  ],
+  "profiles": [
+    "automation"
+  ],
+  "unknown_profiles": [],
+  "profile_packs": [
+    "profile-automation"
+  ],
+  "extra_packs": [
+    "profile-engineering-craft"
+  ],
+  "disabled_packs": [],
+  "resolved_packs": [
+    "base-core",
+    "personal-core",
+    "personal-apps",
+    "profile-automation",
+    "profile-engineering-craft"
+  ],
+  "policies": [
+    "learned-rules-engine",
+    "context-reservoir",
+    "multi-tool-routing",
+    "prompt-contracts-and-handoffs",
+    "clarify-on-low-confidence",
+    "question-driven-choice-making",
+    "base-safety",
+    "security-sensitive-work",
+    "verification-before-completion"
+  ],
+  "enabled_hosts": [
+    "codex",
+    "claude",
+    "gemini",
+    "cursor",
+    "antigravity"
+  ],
+  "project_mcps": [
+    {
+      "id": "local-docs",
+      "description": "Local documentation lookup surface for project docs.",
+      "source_packs": [
+        "base-core"
+      ],
+      "compatible_hosts": [
+        "codex",
+        "claude",
+        "gemini",
+        "cursor",
+        "antigravity"
+      ],
+      "enabled_compatible_hosts": [
+        "codex",
+        "claude",
+        "gemini",
+        "cursor",
+        "antigravity"
+      ],
+      "incompatible_enabled_hosts": [],
+      "target_path": ".mcp.json",
+      "status": "materialized"
+    }
+  ],
+  "hosts": {
+    "codex": {
+      "enabled_packs": [
+        "base-core",
+        "personal-core",
+        "personal-apps",
+        "profile-automation",
+        "profile-engineering-craft"
+      ],
+      "materialized": [
+        {
+          "id": "askaway",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agents/skills/askaway/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "systematic-debugging",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agents/skills/systematic-debugging/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "code-review",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agents/skills/code-review/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "work-packets",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agents/skills/work-packets/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "context-capture",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agents/skills/context-capture/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "personal-context",
+          "source_packs": [
+            "personal-core"
+          ],
+          "target_path": ".agents/skills/personal-context/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "app-builder",
+          "source_packs": [
+            "personal-apps"
+          ],
+          "target_path": ".agents/skills/app-builder/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "implementation-plan",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agents/skills/implementation-plan/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "review-feedback",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agents/skills/review-feedback/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "vibe-security-audit",
+          "source_packs": [
+            "profile-automation"
+          ],
+          "target_path": ".agents/skills/vibe-security-audit/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "refactor-plan",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agents/skills/refactor-plan/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "issue-slicer",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agents/skills/issue-slicer/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        },
+        {
+          "id": "tdd-lite",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agents/skills/tdd-lite/SKILL.md",
+          "runtime_surface": ".agents/skills"
+        }
+      ],
+      "mcps": [
+        {
+          "id": "local-docs",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".mcp.json"
+        }
+      ],
+      "skipped": [],
+      "adapter_file": "AGENTS.md"
+    },
+    "claude": {
+      "enabled_packs": [
+        "base-core",
+        "personal-core",
+        "personal-apps",
+        "profile-automation",
+        "profile-engineering-craft"
+      ],
+      "materialized": [
+        {
+          "id": "askaway",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".claude/skills/askaway/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "systematic-debugging",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".claude/skills/systematic-debugging/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "code-review",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".claude/skills/code-review/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "work-packets",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".claude/skills/work-packets/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "context-capture",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".claude/skills/context-capture/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "personal-context",
+          "source_packs": [
+            "personal-core"
+          ],
+          "target_path": ".claude/skills/personal-context/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "app-builder",
+          "source_packs": [
+            "personal-apps"
+          ],
+          "target_path": ".claude/skills/app-builder/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "implementation-plan",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".claude/skills/implementation-plan/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "review-feedback",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".claude/skills/review-feedback/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "vibe-security-audit",
+          "source_packs": [
+            "profile-automation"
+          ],
+          "target_path": ".claude/skills/vibe-security-audit/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "refactor-plan",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".claude/skills/refactor-plan/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "issue-slicer",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".claude/skills/issue-slicer/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        },
+        {
+          "id": "tdd-lite",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".claude/skills/tdd-lite/SKILL.md",
+          "runtime_surface": ".claude/skills"
+        }
+      ],
+      "mcps": [
+        {
+          "id": "local-docs",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".mcp.json"
+        }
+      ],
+      "skipped": [],
+      "adapter_file": "CLAUDE.md"
+    },
+    "gemini": {
+      "enabled_packs": [
+        "base-core",
+        "personal-core",
+        "personal-apps",
+        "profile-automation",
+        "profile-engineering-craft"
+      ],
+      "materialized": [
+        {
+          "id": "askaway",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".gemini/skills/askaway/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "systematic-debugging",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".gemini/skills/systematic-debugging/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "code-review",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".gemini/skills/code-review/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "work-packets",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".gemini/skills/work-packets/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "context-capture",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".gemini/skills/context-capture/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "personal-context",
+          "source_packs": [
+            "personal-core"
+          ],
+          "target_path": ".gemini/skills/personal-context/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "app-builder",
+          "source_packs": [
+            "personal-apps"
+          ],
+          "target_path": ".gemini/skills/app-builder/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "implementation-plan",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".gemini/skills/implementation-plan/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "review-feedback",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".gemini/skills/review-feedback/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "vibe-security-audit",
+          "source_packs": [
+            "profile-automation"
+          ],
+          "target_path": ".gemini/skills/vibe-security-audit/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "refactor-plan",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".gemini/skills/refactor-plan/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "issue-slicer",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".gemini/skills/issue-slicer/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        },
+        {
+          "id": "tdd-lite",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".gemini/skills/tdd-lite/SKILL.md",
+          "runtime_surface": ".gemini/skills"
+        }
+      ],
+      "mcps": [
+        {
+          "id": "local-docs",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".mcp.json"
+        }
+      ],
+      "skipped": [],
+      "adapter_file": "GEMINI.md"
+    },
+    "cursor": {
+      "enabled_packs": [
+        "base-core",
+        "personal-core",
+        "personal-apps",
+        "profile-automation",
+        "profile-engineering-craft"
+      ],
+      "materialized": [
+        {
+          "id": "askaway",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".cursor/rules/askaway.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "systematic-debugging",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".cursor/rules/systematic-debugging.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "code-review",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".cursor/rules/code-review.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "work-packets",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".cursor/rules/work-packets.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "context-capture",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".cursor/rules/context-capture.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "personal-context",
+          "source_packs": [
+            "personal-core"
+          ],
+          "target_path": ".cursor/rules/personal-context.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "app-builder",
+          "source_packs": [
+            "personal-apps"
+          ],
+          "target_path": ".cursor/rules/app-builder.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "implementation-plan",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".cursor/rules/implementation-plan.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "review-feedback",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".cursor/rules/review-feedback.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "vibe-security-audit",
+          "source_packs": [
+            "profile-automation"
+          ],
+          "target_path": ".cursor/rules/vibe-security-audit.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "refactor-plan",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".cursor/rules/refactor-plan.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "issue-slicer",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".cursor/rules/issue-slicer.mdc",
+          "runtime_surface": ".cursor/rules"
+        },
+        {
+          "id": "tdd-lite",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".cursor/rules/tdd-lite.mdc",
+          "runtime_surface": ".cursor/rules"
+        }
+      ],
+      "mcps": [
+        {
+          "id": "local-docs",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".mcp.json"
+        }
+      ],
+      "skipped": []
+    },
+    "antigravity": {
+      "enabled_packs": [
+        "base-core",
+        "personal-core",
+        "personal-apps",
+        "profile-automation",
+        "profile-engineering-craft"
+      ],
+      "materialized": [
+        {
+          "id": "askaway",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agent/skills/askaway/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "systematic-debugging",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agent/skills/systematic-debugging/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "code-review",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agent/skills/code-review/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "work-packets",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agent/skills/work-packets/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "context-capture",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".agent/skills/context-capture/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "personal-context",
+          "source_packs": [
+            "personal-core"
+          ],
+          "target_path": ".agent/skills/personal-context/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "app-builder",
+          "source_packs": [
+            "personal-apps"
+          ],
+          "target_path": ".agent/skills/app-builder/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "implementation-plan",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agent/skills/implementation-plan/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "review-feedback",
+          "source_packs": [
+            "profile-automation",
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agent/skills/review-feedback/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "vibe-security-audit",
+          "source_packs": [
+            "profile-automation"
+          ],
+          "target_path": ".agent/skills/vibe-security-audit/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "refactor-plan",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agent/skills/refactor-plan/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "issue-slicer",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agent/skills/issue-slicer/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        },
+        {
+          "id": "tdd-lite",
+          "source_packs": [
+            "profile-engineering-craft"
+          ],
+          "target_path": ".agent/skills/tdd-lite/SKILL.md",
+          "runtime_surface": ".agent/skills"
+        }
+      ],
+      "mcps": [
+        {
+          "id": "local-docs",
+          "source_packs": [
+            "base-core"
+          ],
+          "target_path": ".mcp.json"
+        }
+      ],
+      "skipped": [],
+      "adapter_file": "AGENTS.md"
+    }
+  }
+}

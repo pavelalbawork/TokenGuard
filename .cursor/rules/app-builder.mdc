@@ -1,0 +1,7 @@
+---
+description: "App Builder"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.css"]
+alwaysApply: false
+---
+
+Treat personal app work as product-oriented build work, not open-ended experimentation.

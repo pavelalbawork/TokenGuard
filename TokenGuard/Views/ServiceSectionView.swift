@@ -22,7 +22,7 @@ struct ServiceSectionView: View {
                     .foregroundStyle(theme.id == "luminous" ? theme.textPrimary : serviceType.tintColor(for: theme))
 
                 Text(serviceType.rawValue.capitalized)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -52,8 +52,8 @@ struct ServiceSectionView: View {
                                 .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : serviceType.tintColor(for: theme))
 
                             Text(account.displayName)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(theme.textSecondary)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(theme.textPrimary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
 
@@ -87,8 +87,8 @@ struct ServiceSectionView: View {
                 .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : serviceType.tintColor(for: theme))
 
             Text(account.displayName)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(theme.textSecondary)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .minimumScaleFactor(0.8)

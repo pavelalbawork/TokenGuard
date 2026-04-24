@@ -241,19 +241,21 @@ struct MainPopoverView: View {
                             RoundedRectangle(cornerRadius: 7)
                                 .fill(theme.id == "luminous" ? theme.textPrimary.opacity(0.04) : theme.surfaceContainerHigh)
                                 .matchedGeometryEffect(id: "TabHighlight", in: animationNameSpace)
-                            
+
                             if theme.id == "luminous" {
                                 RoundedRectangle(cornerRadius: 7)
                                     .stroke(theme.textPrimary.opacity(0.1), lineWidth: 1)
-                                
-                                VStack {
-                                    Spacer()
-                                    Rectangle()
-                                        .fill(LinearGradient(colors: [theme.primaryAccent.opacity(0.7), theme.primaryAccent], startPoint: .leading, endPoint: .trailing))
-                                        .frame(width: 32, height: 2)
-                                        .clipShape(Capsule())
-                                        .padding(.bottom, 4)
-                                }
+                            }
+                            VStack {
+                                Spacer()
+                                Rectangle()
+                                    .fill(LinearGradient(colors: [
+                                        (theme.id == "luminous" ? theme.secondaryAccent : theme.primaryAccent).opacity(0.7),
+                                        (theme.id == "luminous" ? theme.secondaryAccent : theme.primaryAccent)
+                                    ], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: 32, height: 2)
+                                    .clipShape(Capsule())
+                                    .padding(.bottom, 4)
                             }
                         }
                     }
@@ -341,6 +343,8 @@ struct PopoverAccountEditRow: View {
                 TextField("Enter Alias (Optional)", text: $alias)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .tint(theme.primaryAccent)
                     .padding(8)
                     .background(theme.isLight ? theme.surfaceContainer : theme.backgroundMain)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -732,7 +736,7 @@ struct UnifiedConcentricGauge: View {
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1.2)
                     }
-                    .foregroundStyle(theme.textPrimary)
+                    .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : accentColor)
                 }
                 if let middle = metrics.middleTerm, let middleLbl = middleLabel {
                     HStack(spacing: 3) {
@@ -742,7 +746,7 @@ struct UnifiedConcentricGauge: View {
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1.2)
                     }
-                    .foregroundStyle(theme.textPrimary)
+                    .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : accentColor)
                 }
                 if let inner = metrics.innerTerm, let innerLbl = innerLabel {
                     HStack(spacing: 3) {
@@ -752,7 +756,7 @@ struct UnifiedConcentricGauge: View {
                             .font(.system(size: 9, weight: .semibold))
                             .tracking(1.2)
                     }
-                    .foregroundStyle(theme.textPrimary)
+                    .foregroundStyle(theme.id == "luminous" ? theme.primaryAccent : accentColor)
                 }
             }
         }

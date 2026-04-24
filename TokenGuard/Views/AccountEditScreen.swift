@@ -78,6 +78,8 @@ struct AccountEditRow: View {
                 TextField("Enter Alias (Optional)", text: $alias)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .tint(theme.primaryAccent)
                     .padding(8)
                     .background(theme.isLight ? theme.surfaceContainer : theme.backgroundMain)
                     .clipShape(RoundedRectangle(cornerRadius: 6))

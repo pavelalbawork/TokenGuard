@@ -1,0 +1,7 @@
+---
+description: "Work Packets"
+globs: ["**/*.md", "**/*.toml", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py"]
+alwaysApply: false
+---
+
+When asked to split work across tools/models or make a plan parallelizable, produce compact Execution Packets: objective, owner fit, scope, dependencies, and acceptance evidence. For UI-heavy work without settled visual direction, run Design Inspiration Flow before final implementation packets. Use Prompt Contracts only for delegation-ready handoffs.

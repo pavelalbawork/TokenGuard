@@ -1,0 +1,7 @@
+---
+description: "Context Capture"
+globs: ["**/CONTEXT.md", "Context/*.md", "LEARNED_RULES.md", "**/NOW.md"]
+alwaysApply: false
+---
+
+Use for durable context capture and candidate review. Default to Context Candidate first; write permanent context only when Pavel explicitly asks to save/update/add/capture context. Keep context distinct from learned rules and NOW.

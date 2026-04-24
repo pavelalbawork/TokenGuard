@@ -1,0 +1,7 @@
+---
+description: "Systematic Debugging"
+globs: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.py", "**/*.md"]
+alwaysApply: false
+---
+
+For unclear or repeated bugs, reproduce or collect evidence first, isolate the root cause, make the smallest fix, and verify before claiming success. The verify step produces the `Verified:` artifact required by `verification-before-completion`. Do not patch guesses without evidence.
