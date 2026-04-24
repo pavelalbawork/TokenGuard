@@ -320,6 +320,17 @@ final class UsagePollingEngine {
             guard let identity else { continue }
 
             guard let matchedAccount = matchingConsumerAccount(for: identity, in: accounts) else {
+                // Live identity is present but no registered TokenGuard account
+                // claims it. Unmark any stale active consumer so the UI stops
+                // labelling the wrong account as "live".
+                if accountStore.activeConsumerAccountID(for: serviceType) != nil {
+                    do {
+                        try accountStore.clearActiveConsumer(for: serviceType)
+                        backgroundErrorMessage = nil
+                    } catch {
+                        recordBackgroundError("Could not clear active \(serviceType.rawValue) account", error)
+                    }
+                }
                 continue
             }
 

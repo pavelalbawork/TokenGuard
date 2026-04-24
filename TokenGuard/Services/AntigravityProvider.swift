@@ -74,7 +74,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func fetchUsage(account: Account, credential _: String) async throws -> UsageSnapshot {
-        let authState = try readAuthStateFromStateDb()
+        let authState = try await resolvedAuthState(readAuthStateFromStateDb())
         let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
         // Match this TokenGuard account's name (email) to the corresponding
@@ -140,23 +140,87 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     }
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
-        guard let db = try? openStateDatabase() else {
-            return nil
-        }
-        defer { sqlite3_close(db) }
-
-        if let email = normalizedIdentity(readEmailFromUserStatus(db: db)) {
-            // `antigravity.profileUrl` lags across account switches in live installs,
-            // so use the signed-in email as the stable consumer identity.
-            return ConsumerAccountIdentity(email: email, externalID: nil)
-        }
-
-        guard let legacyState = try? readLegacyAuthState(from: db),
-              let email = normalizedIdentity(legacyState.email) else {
+        guard let authState = try? readAuthStateFromStateDb() else {
             return nil
         }
 
-        return ConsumerAccountIdentity(email: email, externalID: nil)
+        let profileUrl: String? = {
+            guard let db = try? openStateDatabase() else { return nil }
+            defer { sqlite3_close(db) }
+            return normalizedIdentity(readProfileUrl(db: db))
+        }()
+
+        // `antigravityUnifiedStateSync.userStatus` lags behind account switches
+        // in the Antigravity editor. The OAuth refresh_token in `oauthToken`
+        // does flip immediately, so exchanging it for an access + id_token is
+        // the only way to get the email of the *currently active* account.
+        if let refreshToken = authState.refreshToken,
+           let refreshed = try? await refreshAccessToken(refreshToken: refreshToken),
+           let freshEmail = normalizedIdentity(refreshed.email) {
+            return ConsumerAccountIdentity(
+                email: freshEmail,
+                externalID: nil,
+                profileUrl: profileUrl
+            )
+        }
+
+        if let email = normalizedIdentity(authState.email) {
+            return ConsumerAccountIdentity(
+                email: email,
+                externalID: nil,
+                profileUrl: profileUrl
+            )
+        }
+
+        guard profileUrl != nil else { return nil }
+        return ConsumerAccountIdentity(email: nil, externalID: nil, profileUrl: profileUrl)
+    }
+
+    /// Returns the currently-signed-in account's profile URL as recorded in
+    /// `state.vscdb`. This is the freshest per-account identifier Antigravity
+    /// exposes outside the Electron safe-storage keychain blob.
+    private func readProfileUrl(db: OpaquePointer?) -> String? {
+        guard let raw = readItemTableValue(db: db, key: "antigravity.profileUrl") else {
+            return nil
+        }
+        return unquoteJSONString(raw)
+    }
+
+    /// VS Code's ItemTable stores some values as JSON-encoded strings
+    /// (including the surrounding quotes). Strip them when present.
+    private func unquoteJSONString(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\""),
+           let data = trimmed.data(using: .utf8),
+           let decoded = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) as? String {
+            return decoded
+        }
+        return trimmed
+    }
+
+    /// Refreshes the access token when a refresh token is available so that
+    /// downstream API calls see the currently-signed-in account rather than a
+    /// stale cached token. The refreshed `id_token` also carries the live
+    /// account email, which `currentConsumerIdentity()` relies on to pick the
+    /// correct TokenGuard account to mark active.
+    private func resolvedAuthState(_ authState: AntigravityAuthState) async throws -> AntigravityAuthState {
+        guard let refreshToken = authState.refreshToken else {
+            return authState
+        }
+
+        do {
+            let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
+            return AntigravityAuthState(
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshToken,
+                email: refreshed.email ?? authState.email,
+                name: authState.name
+            )
+        } catch ServiceProviderError.unauthorized {
+            throw ServiceProviderError.unauthorized
+        } catch {
+            return authState
+        }
     }
 
     // MARK: - Direct path (cloudcode-pa API)
