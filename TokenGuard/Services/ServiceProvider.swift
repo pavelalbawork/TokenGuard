@@ -175,6 +175,13 @@ struct SystemCodexAppServerSessionFactory: CodexAppServerSessionFactory {
 struct ConsumerAccountIdentity: Sendable, Equatable {
     let email: String?
     let externalID: String?
+    let profileUrl: String?
+
+    init(email: String?, externalID: String?, profileUrl: String? = nil) {
+        self.email = email
+        self.externalID = externalID
+        self.profileUrl = profileUrl
+    }
 }
 
 protocol ConsumerAccountDetecting: Sendable {

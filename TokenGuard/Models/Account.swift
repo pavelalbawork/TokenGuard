@@ -77,6 +77,7 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
         static let resetDayOfMonth = "resetDayOfMonth"
         static let resetHourUTC = "resetHourUTC"
         static let antigravityBaseURL = "antigravityBaseURL"
+        static let antigravityProfileUrl = "antigravityProfileUrl"
     }
 
     let id: UUID
@@ -134,7 +135,17 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
         normalizedConsumerIdentity(configurationValue(for: ConfigurationKey.consumerExternalID))
     }
 
+    var antigravityProfileUrl: String? {
+        normalizedConsumerIdentity(configurationValue(for: ConfigurationKey.antigravityProfileUrl))
+    }
+
     func matchingConsumerIdentityScore(_ identity: ConsumerAccountIdentity) -> Int? {
+        if let profileUrl = antigravityProfileUrl,
+           let liveProfileUrl = identity.profileUrl,
+           profileUrl == normalizedConsumerIdentity(liveProfileUrl) {
+            return 3
+        }
+
         if let externalID = consumerExternalID,
            let liveExternalID = identity.externalID,
            externalID == normalizedConsumerIdentity(liveExternalID) {
@@ -162,6 +173,14 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
            let externalID = normalizedConsumerIdentity(identity.externalID) {
             updated.configuration[ConfigurationKey.consumerExternalID] = externalID
         }
+
+        // NOTE: `identity.profileUrl` is intentionally NOT auto-persisted here.
+        // For Antigravity, the live identity's profileUrl points at the CURRENTLY
+        // ACTIVE account in the editor, but `matchingConsumerAccount` may have
+        // selected a different TokenGuard account via a stale email match. Writing
+        // the fresh profileUrl onto that wrongly-matched account would corrupt its
+        // identity. profileUrl is captured at add-time (AddAccountView) or via
+        // explicit retro-capture; never as a side effect of sync.
 
         return updated
     }

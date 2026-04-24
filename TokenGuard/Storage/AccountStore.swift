@@ -59,6 +59,14 @@ final class AccountStore {
         activeConsumerAccountIDs = updated
     }
 
+    func clearActiveConsumer(for serviceType: ServiceType) throws {
+        guard activeConsumerAccountIDs[serviceType.rawValue] != nil else { return }
+        var updated = activeConsumerAccountIDs
+        updated.removeValue(forKey: serviceType.rawValue)
+        try persist(accounts: accounts, activeConsumerAccountIDs: updated)
+        activeConsumerAccountIDs = updated
+    }
+
     // MARK: - CRUD
 
     func add(_ account: Account) throws {

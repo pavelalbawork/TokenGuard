@@ -212,7 +212,15 @@ struct InlineAddAccountView: View {
         let provider = provider(for: selectedProvider)
         let detectedIdentity = try await consumerIdentityIfAvailable(for: provider)
 
-        if let detectedEmail = normalizedIdentity(detectedIdentity?.email),
+        // Antigravity stores the signed-in email in a protobuf blob that lags
+        // behind account switches (it keeps showing the "primary" account even
+        // after the user switches to another signed-in account). The only
+        // freshly-updating identifier is `antigravity.profileUrl`, so we cannot
+        // validate the entered email against the detected email here — the user
+        // would be blocked from adding any non-primary account. Trust the user's
+        // input instead and capture the current profileUrl for later matching.
+        if selectedProvider != .antigravity,
+           let detectedEmail = normalizedIdentity(detectedIdentity?.email),
            detectedEmail != normalizedEmail {
             throw AddAccountValidationError.identityMismatch(
                 provider: selectedProvider.rawValue.capitalized,
@@ -226,10 +234,19 @@ struct InlineAddAccountView: View {
             Account.ConfigurationKey.planType: "consumer"
         ]
 
-        let consumerEmail = normalizedIdentity(detectedIdentity?.email) ?? normalizedEmail
+        let consumerEmail: String
+        if selectedProvider == .antigravity {
+            consumerEmail = normalizedEmail
+        } else {
+            consumerEmail = normalizedIdentity(detectedIdentity?.email) ?? normalizedEmail
+        }
         configuration[Account.ConfigurationKey.consumerEmail] = consumerEmail
         if let externalID = normalizedIdentity(detectedIdentity?.externalID) {
             configuration[Account.ConfigurationKey.consumerExternalID] = externalID
+        }
+        if selectedProvider == .antigravity,
+           let profileUrl = normalizedIdentity(detectedIdentity?.profileUrl) {
+            configuration[Account.ConfigurationKey.antigravityProfileUrl] = profileUrl
         }
 
         let account = Account(
