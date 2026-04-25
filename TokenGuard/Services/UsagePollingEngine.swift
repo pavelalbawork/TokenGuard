@@ -1,20 +1,6 @@
 import Foundation
 import Observation
 
-func tgLog(_ message: String) {
-    let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        .appendingPathComponent("TokenGuard")
-        .appendingPathComponent("debug.log")
-    let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(message)\n"
-    if let handle = try? FileHandle(forWritingTo: url) {
-        handle.seekToEndOfFile()
-        handle.write(line.data(using: .utf8)!)
-        handle.closeFile()
-    } else {
-        try? line.data(using: .utf8)?.write(to: url)
-    }
-}
-
 @MainActor
 @Observable
 final class UsagePollingEngine {
@@ -319,11 +305,8 @@ final class UsagePollingEngine {
             by: \.serviceType
         )
 
-        tgLog("[PE] synchronizeActiveConsumerAccounts: force=\(force), serviceTypes=\(consumerAccountsByService.keys.map(\.rawValue).sorted().joined(separator: ",")), totalAccounts=\(accountStore.accounts.count), consumerAccounts=\(consumerAccountsByService.values.flatMap { $0 }.count)")
-
         for (serviceType, accounts) in consumerAccountsByService {
             if !force, shouldSkipIdentitySync(for: serviceType) {
-                tgLog("[PE] sync[\(serviceType.rawValue)]: skipped (throttled)")
                 continue
             }
             lastIdentitySyncAt[serviceType] = Date()
@@ -353,16 +336,7 @@ final class UsagePollingEngine {
             }
 
             guard let identity else {
-                tgLog("[PE] sync[\(serviceType.rawValue)]: identity detection returned nil, skipping")
                 continue
-            }
-
-            tgLog("[PE] sync[\(serviceType.rawValue)]: detected identity email=\(identity.email ?? "nil") profileUrl=\(identity.profileUrl ?? "nil")")
-
-            // Log matching scores for all accounts
-            for acct in accounts {
-                let score = acct.matchingConsumerIdentityScore(identity)
-                tgLog("[PE] sync[\(serviceType.rawValue)]:   account '\(acct.displayName)' email=\(acct.consumerEmail ?? "nil") profileUrl=\(acct.antigravityProfileUrl ?? "nil") → score=\(score.map(String.init) ?? "nil")")
             }
 
             var matchedAccount = matchingConsumerAccount(for: identity, in: accounts)
@@ -383,12 +357,10 @@ final class UsagePollingEngine {
                     var updated = otherAccount
                     updated.configuration[Account.ConfigurationKey.antigravityProfileUrl] = liveProfileUrl
                     try? accountStore.update(updated)
-                    tgLog("[PE] sync[antigravity]: switch detected, inferred → '\(otherAccount.displayName)' and stored profileUrl")
                 }
             }
 
             guard let matchedAccount else {
-                tgLog("[PE] sync[\(serviceType.rawValue)]: no account matched, clearing active consumer")
                 // Live identity is present but no registered TokenGuard account
                 // claims it. Unmark any stale active consumer so the UI stops
                 // labelling the wrong account as "live".
@@ -403,8 +375,6 @@ final class UsagePollingEngine {
                 continue
             }
 
-            tgLog("[PE] sync[\(serviceType.rawValue)]: matched → '\(matchedAccount.displayName)' (id=\(matchedAccount.id.uuidString))")
-
             // Antigravity bootstrap: when the email match is confident (no
             // switch detected, email present) and the account has no stored
             // profileUrl, capture the current profileUrl for future switch
@@ -416,7 +386,6 @@ final class UsagePollingEngine {
                 var updated = matchedAccount
                 updated.configuration[Account.ConfigurationKey.antigravityProfileUrl] = liveProfileUrl
                 try? accountStore.update(updated)
-                tgLog("[PE] sync[antigravity]: bootstrapped profileUrl on '\(matchedAccount.displayName)'")
             }
 
             if serviceType == .codex {
@@ -430,15 +399,12 @@ final class UsagePollingEngine {
 
             let previousActiveID = accountStore.activeConsumerAccountID(for: serviceType)
             if previousActiveID != matchedAccount.id {
-                tgLog("[PE] sync[\(serviceType.rawValue)]: SWITCHING active consumer from \(previousActiveID?.uuidString ?? "none") → \(matchedAccount.id.uuidString)")
                 do {
                     try accountStore.setActiveConsumer(matchedAccount.id, for: serviceType)
                     backgroundErrorMessage = nil
                 } catch {
                     recordBackgroundError("Could not update active \(serviceType.rawValue) account", error)
                 }
-            } else {
-                tgLog("[PE] sync[\(serviceType.rawValue)]: active consumer unchanged ('\(matchedAccount.displayName)')")
             }
 
             let updatedAccount = matchedAccount.withStoredConsumerIdentity(identity)
