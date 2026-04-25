@@ -96,8 +96,13 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
 
             // Save the refresh token so this account can fetch independently
             // after an account switch makes the stateDB credentials stale.
+            // Only write when the token is new or changed to avoid repeated
+            // Keychain prompts on every poll cycle.
             if let refreshToken = authState.refreshToken, !account.credentialRef.isEmpty {
-                try? keychainManager?.saveSecret(refreshToken, reference: account.credentialRef)
+                let existing = try? keychainManager?.readSecret(reference: account.credentialRef, allowUserInteraction: false)
+                if existing != refreshToken {
+                    try? keychainManager?.saveSecret(refreshToken, reference: account.credentialRef)
+                }
             }
         } else {
             // StaleDB credentials belong to a different account. Try this

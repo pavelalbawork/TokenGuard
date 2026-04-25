@@ -247,21 +247,23 @@ struct InlineAddAccountView: View {
         let provider = provider(for: selectedProvider)
         let detectedIdentity = try await consumerIdentityIfAvailable(for: provider)
 
-        // Antigravity stores the signed-in email in a protobuf blob that lags
-        // behind account switches (it keeps showing the "primary" account even
-        // after the user switches to another signed-in account). The only
-        // freshly-updating identifier is `antigravity.profileUrl`, so we cannot
-        // validate the entered email against the detected email here — the user
-        // would be blocked from adding any non-primary account. Trust the user's
-        // input instead and capture the current profileUrl for later matching.
-        if selectedProvider != .antigravity,
-           let detectedEmail = normalizedIdentity(detectedIdentity?.email),
-           detectedEmail != normalizedEmail {
-            throw AddAccountValidationError.identityMismatch(
-                provider: selectedProvider.rawValue.capitalized,
-                detectedEmail: detectedEmail,
-                enteredEmail: normalizedEmail
-            )
+        // For non-Antigravity providers, require identity detection to succeed
+        // so we can verify the entered email matches the signed-in account.
+        // Antigravity is exempt because its stateDB email lags behind account
+        // switches — the mismatch warning is handled separately in saveAccount().
+        if selectedProvider != .antigravity {
+            guard let detectedEmail = normalizedIdentity(detectedIdentity?.email) else {
+                throw AddAccountValidationError.identityUndetectable(
+                    provider: selectedProvider.rawValue.capitalized
+                )
+            }
+            if detectedEmail != normalizedEmail {
+                throw AddAccountValidationError.identityMismatch(
+                    provider: selectedProvider.rawValue.capitalized,
+                    detectedEmail: detectedEmail,
+                    enteredEmail: normalizedEmail
+                )
+            }
         }
 
         let credentialRef = "\(selectedProvider.rawValue)-\(UUID().uuidString)"
@@ -359,6 +361,7 @@ struct InlineAddAccountView: View {
 private enum AddAccountValidationError: LocalizedError {
     case missingEmail
     case identityMismatch(provider: String, detectedEmail: String, enteredEmail: String)
+    case identityUndetectable(provider: String)
     case providerStateUnavailable(provider: String)
 
     var errorDescription: String? {
@@ -367,6 +370,8 @@ private enum AddAccountValidationError: LocalizedError {
             return "Enter the email or identifier shown by the signed-in local provider."
         case let .identityMismatch(provider, detectedEmail, enteredEmail):
             return "\(provider) is signed into \(detectedEmail), not \(enteredEmail). Switch the local \(provider) session or enter the active account before saving."
+        case let .identityUndetectable(provider):
+            return "Could not detect the signed-in \(provider) account. Make sure the CLI/app is fully authenticated, then try again."
         case let .providerStateUnavailable(provider):
             return "TokenGuard could not verify local \(provider) state on this Mac. Open the provider CLI/app, confirm you are signed in, then try again."
         }
