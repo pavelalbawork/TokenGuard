@@ -995,6 +995,7 @@ enum ServiceProviderError: LocalizedError, Equatable, Sendable {
     case unexpectedStatus(Int, String?)
     case unavailable(String)
     case agentNotRunning(String)
+    case credentialsStale
     case invalidPayload(String)
 
     var errorDescription: String? {
@@ -1011,6 +1012,8 @@ enum ServiceProviderError: LocalizedError, Equatable, Sendable {
             return message
         case let .agentNotRunning(message):
             return message
+        case .credentialsStale:
+            return "Credentials belong to a different account."
         case let .invalidPayload(message):
             return message
         }

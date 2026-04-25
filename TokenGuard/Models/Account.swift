@@ -140,9 +140,18 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
     }
 
     func matchingConsumerIdentityScore(_ identity: ConsumerAccountIdentity) -> Int? {
+        let emailMatches: Bool? = {
+            guard let email = consumerEmail,
+                  let liveEmail = normalizedConsumerIdentity(identity.email) else {
+                return nil
+            }
+            return email == liveEmail
+        }()
+
         if let profileUrl = antigravityProfileUrl,
            let liveProfileUrl = identity.profileUrl,
-           profileUrl == normalizedConsumerIdentity(liveProfileUrl) {
+           profileUrl == normalizedConsumerIdentity(liveProfileUrl),
+           emailMatches != false {
             return 3
         }
 
@@ -152,9 +161,7 @@ struct Account: Identifiable, Codable, Hashable, Sendable {
             return 2
         }
 
-        if let email = consumerEmail,
-           let liveEmail = identity.email,
-           email == normalizedConsumerIdentity(liveEmail) {
+        if emailMatches == true {
             return 1
         }
 

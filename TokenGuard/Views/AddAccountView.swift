@@ -12,6 +12,8 @@ struct InlineAddAccountView: View {
     @State private var accountEmail = ""
     @State private var accountAlias = ""
     @State private var statusMessage: String?
+    @State private var warningMessage: String?
+    @State private var mismatchConfirmed = false
     @State private var isSaving = false
 
     var body: some View {
@@ -110,6 +112,18 @@ struct InlineAddAccountView: View {
                             .foregroundStyle(theme.error)
                             .padding(.top, 4)
                     }
+
+                    if let warningMessage {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.system(size: 10))
+                            Text(warningMessage)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.orange.opacity(0.9))
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -122,7 +136,7 @@ struct InlineAddAccountView: View {
                         if isSaving {
                             ProgressView().controlSize(.small).tint(theme.backgroundMain)
                         } else {
-                            Text("SAVE ACCOUNT")
+                            Text(mismatchConfirmed ? "SAVE ANYWAY" : "SAVE ACCOUNT")
                                 .tracking(1.5)
                         }
                     }
@@ -143,6 +157,15 @@ struct InlineAddAccountView: View {
             .border(width: 1, edges: [.top], color: theme.border)
         }
         .padding(.top, 16)
+        .onChange(of: selectedProvider) { _, _ in
+            mismatchConfirmed = false
+            warningMessage = nil
+            statusMessage = nil
+        }
+        .onChange(of: accountEmail) { _, _ in
+            mismatchConfirmed = false
+            warningMessage = nil
+        }
     }
 
     @ViewBuilder
@@ -188,6 +211,18 @@ struct InlineAddAccountView: View {
                     email: normalizedEmail,
                     alias: normalizedAlias.isEmpty ? nil : normalizedAlias
                 )
+
+                if selectedProvider == .antigravity && !mismatchConfirmed {
+                    if let warning = await antigravityMismatchWarning(enteredEmail: normalizedEmail) {
+                        await MainActor.run {
+                            warningMessage = warning
+                            mismatchConfirmed = true
+                            isSaving = false
+                        }
+                        return
+                    }
+                }
+
                 try accountStore.add(account)
                 await pollingEngine.refreshAll(force: true)
                 await MainActor.run {
@@ -292,6 +327,26 @@ struct InlineAddAccountView: View {
         }
 
         return "Unable to verify local provider state. \(error.localizedDescription)"
+    }
+
+    private func antigravityMismatchWarning(enteredEmail: String) async -> String? {
+        let provider = AntigravityProvider()
+        guard let identity = try? await provider.currentConsumerIdentity() else {
+            return nil
+        }
+
+        let entered = enteredEmail.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let detectedEmail = identity.email?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines),
+           !detectedEmail.isEmpty {
+            if detectedEmail != entered {
+                return "Antigravity is currently signed into \(detectedEmail). Usage for \(enteredEmail) won't appear until you switch to this account in Antigravity."
+            }
+            return nil
+        }
+
+        // No email detected — likely an account switch; can't verify
+        return "Could not verify the active Antigravity account. Usage for \(enteredEmail) won't appear until its credentials are captured (requires signing into this account in Antigravity)."
     }
 
     private func normalizedIdentity(_ value: String?) -> String? {

@@ -56,6 +56,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     private let cloudCodeBaseURL: URL
     private let session: NetworkSession
     private let now: @Sendable () -> Date
+    private let keychainManager: KeychainManager?
 
     init(
         stateDbURL: URL = URL(
@@ -65,15 +66,17 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         ),
         cloudCodeBaseURL: URL = URL(string: "https://cloudcode-pa.googleapis.com")!,
         session: NetworkSession = URLSession.shared,
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        keychainManager: KeychainManager? = nil
     ) {
         self.stateDbURL = stateDbURL
         self.cloudCodeBaseURL = cloudCodeBaseURL
         self.session = session
         self.now = now
+        self.keychainManager = keychainManager
     }
 
-    func fetchUsage(account: Account, credential _: String) async throws -> UsageSnapshot {
+    func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {
         let authState = try await resolvedAuthState(readAuthStateFromStateDb())
         let accounts: [AntigravityAccount] = try await readAccountsDirect(authState: authState)
 
@@ -81,6 +84,7 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         // Antigravity database account.  Fall back to the active/first account
         // when no email matches, preserving existing single-account behavior.
         let target: AntigravityAccount
+        tgLog("[AG] fetchUsage: account='\(account.displayName)' name=\(account.name) consumerEmail=\(account.consumerEmail ?? "nil"), API returned \(accounts.count) accounts: \(accounts.map { "\($0.email)(active=\($0.isActive))" }.joined(separator: ", "))")
         if let byName = accounts.first(where: {
             let normalizedAccountName = normalizedIdentity(account.name)
             let normalizedConfiguredEmail = normalizedIdentity(account.consumerEmail)
@@ -88,10 +92,23 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             return normalizedCandidateEmail == normalizedAccountName || normalizedCandidateEmail == normalizedConfiguredEmail
         }) {
             target = byName
-        } else if let active = accounts.first(where: { $0.isActive }) ?? accounts.first {
-            target = active
+            tgLog("[AG] fetchUsage: matched by name/email → \(byName.email)")
+
+            // Save the refresh token so this account can fetch independently
+            // after an account switch makes the stateDB credentials stale.
+            if let refreshToken = authState.refreshToken, !account.credentialRef.isEmpty {
+                try? keychainManager?.saveSecret(refreshToken, reference: account.credentialRef)
+            }
         } else {
-            throw ServiceProviderError.unavailable("No Antigravity accounts found.")
+            // StaleDB credentials belong to a different account. Try this
+            // account's own saved refresh token from the Keychain.
+            let savedRefreshToken = credential.isEmpty ? nil : credential
+            if let refreshToken = savedRefreshToken {
+                tgLog("[AG] fetchUsage: stateDB stale, trying saved refresh token for '\(account.displayName)'")
+                return try await fetchUsageWithRefreshToken(refreshToken, account: account)
+            }
+            tgLog("[AG] fetchUsage: no email match and no saved credentials, skipping")
+            throw ServiceProviderError.credentialsStale
         }
 
         let timestamp = now()
@@ -128,6 +145,58 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         )
     }
 
+    /// Fetches usage using a saved per-account refresh token instead of the
+    /// stateDB credentials (which may belong to a different account after a switch).
+    private func fetchUsageWithRefreshToken(_ refreshToken: String, account: Account) async throws -> UsageSnapshot {
+        let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
+        let authState = AntigravityAuthState(
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshToken,
+            email: refreshed.email,
+            name: nil
+        )
+        let accounts = try await readAccountsDirect(authState: authState)
+
+        guard let target = accounts.first else {
+            throw ServiceProviderError.unavailable("No Antigravity accounts found.")
+        }
+
+        tgLog("[AG] fetchUsage: saved-token fetch OK for '\(account.displayName)' → \(target.email)")
+
+        let timestamp = now()
+        var windows: [UsageWindow] = []
+        var breakdown: [UsageBreakdown] = []
+
+        for pool in target.pools {
+            let usedPercent = Double(100 - pool.remainingPercent)
+            windows.append(UsageWindow(
+                windowType: .daily,
+                used: usedPercent,
+                limit: 100,
+                unit: .percent,
+                resetDate: pool.resetTime,
+                label: pool.category.displayName
+            ))
+            for model in pool.modelNames {
+                breakdown.append(UsageBreakdown(
+                    label: model,
+                    used: usedPercent,
+                    limit: 100,
+                    unit: .percent
+                ))
+            }
+        }
+
+        return UsageSnapshot(
+            accountId: account.id,
+            timestamp: timestamp,
+            windows: windows,
+            tier: target.email.isEmpty ? "Antigravity" : target.email,
+            breakdown: breakdown.isEmpty ? nil : breakdown,
+            isStale: false
+        )
+    }
+
     func validateCredentials(account _: Account, credential _: String) async throws -> Bool {
         guard FileManager.default.fileExists(atPath: stateDbURL.path) else {
             throw ServiceProviderError.unavailable(
@@ -141,30 +210,54 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
 
     func currentConsumerIdentity() async throws -> ConsumerAccountIdentity? {
         guard let authState = try? readAuthStateFromStateDb() else {
+            tgLog("[AG] identity: could not read auth state from stateDB")
             return nil
         }
 
-        let profileUrl: String? = {
-            guard let db = try? openStateDatabase() else { return nil }
-            defer { sqlite3_close(db) }
-            return normalizedIdentity(readProfileUrl(db: db))
-        }()
+        let db = try? openStateDatabase()
+        defer { if let db { sqlite3_close(db) } }
 
-        // `antigravityUnifiedStateSync.userStatus` lags behind account switches
-        // in the Antigravity editor. The OAuth refresh_token in `oauthToken`
-        // does flip immediately, so exchanging it for an access + id_token is
-        // the only way to get the email of the *currently active* account.
-        if let refreshToken = authState.refreshToken,
-           let refreshed = try? await refreshAccessToken(refreshToken: refreshToken),
-           let freshEmail = normalizedIdentity(refreshed.email) {
-            return ConsumerAccountIdentity(
-                email: freshEmail,
-                externalID: nil,
-                profileUrl: profileUrl
-            )
+        let profileUrl = db.flatMap { normalizedIdentity(readProfileUrl(db: $0)) }
+
+        // Detect account switch: `antigravity.profileUrl` (live, updates on
+        // switch) vs the profileUrl embedded in the protobuf `userStatus`
+        // (stale, never updates on switch).  When they differ, the OAuth token
+        // and email in stateDB belong to the OLD account and must be ignored.
+        let staleProfileUrl = db.flatMap { readProfileUrlFromUserStatus(db: $0) }
+        let accountSwitched = profileUrl != nil && staleProfileUrl != nil && profileUrl != staleProfileUrl
+
+        tgLog("[AG] identity: profileUrl=\(profileUrl ?? "nil") staleProfileUrl=\(staleProfileUrl ?? "nil") switched=\(accountSwitched) hasRefreshToken=\(authState.refreshToken != nil)")
+
+        if accountSwitched {
+            // After an account switch, the oauthToken and userStatus in stateDB
+            // still belong to the previous account.  Return a profileUrl-only
+            // identity so the polling engine can match by stored profileUrl
+            // rather than the stale email.
+            tgLog("[AG] identity: switch detected — returning profileUrl-only identity")
+            return ConsumerAccountIdentity(email: nil, externalID: nil, profileUrl: profileUrl)
+        }
+
+        // No switch detected — email sources are trustworthy.
+        if let refreshToken = authState.refreshToken {
+            do {
+                let refreshed = try await refreshAccessToken(refreshToken: refreshToken)
+                if let freshEmail = normalizedIdentity(refreshed.email) {
+                    tgLog("[AG] identity: OAuth refresh succeeded, freshEmail=\(freshEmail)")
+                    return ConsumerAccountIdentity(
+                        email: freshEmail,
+                        externalID: nil,
+                        profileUrl: profileUrl
+                    )
+                } else {
+                    tgLog("[AG] identity: OAuth refresh returned nil email")
+                }
+            } catch {
+                tgLog("[AG] identity: OAuth refresh FAILED: \(error.localizedDescription)")
+            }
         }
 
         if let email = normalizedIdentity(authState.email) {
+            tgLog("[AG] identity: falling back to stale stateDB email=\(email)")
             return ConsumerAccountIdentity(
                 email: email,
                 externalID: nil,
@@ -172,7 +265,11 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
             )
         }
 
-        guard profileUrl != nil else { return nil }
+        guard profileUrl != nil else {
+            tgLog("[AG] identity: no email and no profileUrl, returning nil")
+            return nil
+        }
+        tgLog("[AG] identity: returning profileUrl-only identity")
         return ConsumerAccountIdentity(email: nil, externalID: nil, profileUrl: profileUrl)
     }
 
@@ -257,6 +354,20 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
     /// Walk those payloads recursively until an email-shaped token appears.
     private func readEmailFromUserStatus(db: OpaquePointer?) -> String? {
         let pattern = "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}"
+        for payload in decodedUserStatusPayloads(db: db) {
+            let text = String(decoding: payload, as: UTF8.self)
+            if let range = text.range(of: pattern, options: .regularExpression) {
+                return normalizedIdentity(String(text[range]))
+            }
+        }
+        return nil
+    }
+
+    /// Reads the profile URL embedded inside `antigravityUnifiedStateSync.userStatus` (protobuf).
+    /// This URL is stale — it does NOT update on account switches. Comparing it
+    /// against the live `antigravity.profileUrl` ItemTable key detects switches.
+    private func readProfileUrlFromUserStatus(db: OpaquePointer?) -> String? {
+        let pattern = "https://lh3\\.googleusercontent\\.com/[^\\s\"<>]+"
         for payload in decodedUserStatusPayloads(db: db) {
             let text = String(decoding: payload, as: UTF8.self)
             if let range = text.range(of: pattern, options: .regularExpression) {

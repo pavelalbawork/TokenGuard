@@ -313,64 +313,116 @@ struct PopoverAccountEditRow: View {
     @State private var mutationError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: account.serviceType.iconName)
-                    .rotationEffect(.degrees(account.serviceType.rotationAngle))
-                    .foregroundStyle(account.serviceType.tintColor(for: theme))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(account.serviceType.rawValue.uppercased())
+        ZStack {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: account.serviceType.iconName)
+                        .rotationEffect(.degrees(account.serviceType.rotationAngle))
+                        .foregroundStyle(account.serviceType.tintColor(for: theme))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(account.serviceType.rawValue.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(theme.textSecondary)
+                        Text(account.consumerEmail ?? account.name)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(theme.textPrimary)
+                    }
+                    Spacer()
+
+                    Button(action: {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isDeleteConfirmationPresented = true
+                        }
+                    }) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(theme.error.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("ALIAS")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(theme.textSecondary)
-                    Text(account.consumerEmail ?? account.name)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-                }
-                Spacer()
 
-                Button(action: { isDeleteConfirmationPresented = true }) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(theme.error.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-            }
+                    TextField("Enter Alias (Optional)", text: $alias)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                        .tint(theme.primaryAccent)
+                        .padding(8)
+                        .background(theme.isLight ? theme.surfaceContainer : theme.backgroundMain)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
+                        .onChange(of: alias) { _, newValue in
+                            updateAlias(newValue)
+                        }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("ALIAS")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(theme.textSecondary)
-
-                TextField("Enter Alias (Optional)", text: $alias)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .tint(theme.primaryAccent)
-                    .padding(8)
-                    .background(theme.isLight ? theme.surfaceContainer : theme.backgroundMain)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border, lineWidth: 1))
-                    .onChange(of: alias) { _, newValue in
-                        updateAlias(newValue)
+                    if let mutationError {
+                        Text(mutationError)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(theme.error)
                     }
-
-                if let mutationError {
-                    Text(mutationError)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(theme.error)
                 }
             }
-        }
-        .padding(12)
-        .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
-        .alert("Delete account?", isPresented: $isDeleteConfirmationPresented) {
-            Button("Delete", role: .destructive) {
-                deleteAccount()
+            .padding(12)
+            .background(theme.isLight ? theme.surfaceContainerHigh : theme.surfaceContainerHigh.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
+
+            // In-popover delete confirmation overlay (replaces native .alert which breaks in MenuBarExtra)
+            if isDeleteConfirmationPresented {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(theme.isLight ? theme.surfaceContainerHigh : Color(hex: "#1c2333"))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border, lineWidth: 1))
+
+                VStack(spacing: 12) {
+                    Text("Delete account?")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.textPrimary)
+
+                    Text("This removes the saved account\nand its local state.")
+                        .font(.system(size: 11, weight: .regular))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(theme.textSecondary)
+
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isDeleteConfirmationPresented = false
+                            }
+                        }) {
+                            Text("Cancel")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(theme.textPrimary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(theme.surfaceContainerHigh)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isDeleteConfirmationPresented = false
+                            }
+                            deleteAccount()
+                        }) {
+                            Text("Delete")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(theme.error)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .padding(16)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the saved account and its local state.")
         }
         .onAppear {
             alias = account.alias ?? ""
