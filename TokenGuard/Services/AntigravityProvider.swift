@@ -84,9 +84,11 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
         // Antigravity database account.  Fall back to the active/first account
         // when no email matches, preserving existing single-account behavior.
         let target: AntigravityAccount
+        let normalizedAccountName = normalizedIdentity(account.name)
+        let normalizedConfiguredEmail = normalizedIdentity(account.consumerEmail)
+        let hasStoredConsumerIdentity = normalizedConfiguredEmail != nil || account.antigravityProfileUrl != nil
+
         if let byName = accounts.first(where: {
-            let normalizedAccountName = normalizedIdentity(account.name)
-            let normalizedConfiguredEmail = normalizedIdentity(account.consumerEmail)
             let normalizedCandidateEmail = normalizedIdentity($0.email)
             return normalizedCandidateEmail == normalizedAccountName || normalizedCandidateEmail == normalizedConfiguredEmail
         }) {
@@ -102,6 +104,12 @@ struct AntigravityProvider: ServiceProvider, ConsumerAccountDetecting {
                     try? keychainManager?.saveSecret(refreshToken, reference: account.credentialRef)
                 }
             }
+        } else if !hasStoredConsumerIdentity,
+                  let active = accounts.first(where: { $0.isActive }) ?? accounts.first {
+            // Legacy or manually-created Antigravity accounts may not have a
+            // stored consumer identity yet. Keep reading the active local app
+            // account so migration does not break usage collection.
+            target = active
         } else {
             // StaleDB credentials belong to a different account. Try this
             // account's own saved refresh token from the Keychain.

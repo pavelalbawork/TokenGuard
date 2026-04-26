@@ -219,7 +219,107 @@ final class UsagePollingEngineTests: XCTestCase {
 
         XCTAssertEqual(accountStore.activeConsumerAccountID(for: .antigravity), secondAccount.id)
         XCTAssertEqual(engine.accountStates[secondAccount.id]?.snapshot?.windows.first?.used, 12)
-        XCTAssertNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
+        XCTAssertNotNil(engine.accountStates[firstAccount.id]?.lastAttemptAt)
+    }
+
+    func testAntigravityProfileUrlOnlyIdentityDoesNotInferUnmatchedAccount() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let firstAccount = Account(
+            name: "work@example.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "work@example.com",
+                Account.ConfigurationKey.antigravityProfileUrl: "https://lh3.googleusercontent.com/a/work=s96-c"
+            ]
+        )
+        let secondAccount = Account(
+            name: "personal@example.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-2",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "personal@example.com"
+            ]
+        )
+
+        try accountStore.add(firstAccount)
+        try accountStore.add(secondAccount)
+
+        let snapshot = UsageSnapshot(
+            accountId: secondAccount.id,
+            timestamp: Date(timeIntervalSince1970: 1_775_000_000),
+            windows: [
+                UsageWindow(windowType: .daily, used: 12, limit: 100, unit: .percent, resetDate: nil, label: "Anthropic (Claude)")
+            ],
+            tier: "personal@example.com"
+        )
+        let provider = MockConsumerIdentityProvider(
+            serviceType: .antigravity,
+            identity: ConsumerAccountIdentity(
+                email: nil,
+                externalID: nil,
+                profileUrl: "https://lh3.googleusercontent.com/a/unregistered=s96-c"
+            ),
+            snapshot: snapshot
+        )
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.antigravity: provider],
+            serviceRefreshIntervals: [.antigravity: 300],
+            sleep: { _ in }
+        )
+
+        await engine.refreshAll(force: true)
+
+        XCTAssertNil(accountStore.activeConsumerAccountID(for: .antigravity))
+        XCTAssertNil(accountStore.accounts.first(where: { $0.id == secondAccount.id })?.antigravityProfileUrl)
+    }
+
+    func testCredentialsStaleDoesNotCreateLiveEmptySnapshot() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let storageURL = tempDirectory.appendingPathComponent("accounts.json")
+        let accountStore = AccountStore(storageURL: storageURL)
+        let keychainManager = KeychainManager(backingStore: InMemoryKeychainBackingStore())
+
+        let account = Account(
+            name: "work@example.com",
+            serviceType: .antigravity,
+            credentialRef: "antigravity-1",
+            configuration: [
+                Account.ConfigurationKey.planType: "consumer",
+                Account.ConfigurationKey.consumerEmail: "work@example.com"
+            ]
+        )
+        try accountStore.add(account)
+
+        let engine = UsagePollingEngine(
+            accountStore: accountStore,
+            keychainManager: keychainManager,
+            providers: [.antigravity: MockCredentialsStaleProvider()],
+            serviceRefreshIntervals: [.antigravity: 300],
+            sleep: { _ in }
+        )
+
+        await engine.refreshAll(force: true)
+
+        XCTAssertNil(engine.accountStates[account.id]?.snapshot)
+        XCTAssertEqual(engine.accountStates[account.id]?.errorMessage, ServiceProviderError.credentialsStale.errorDescription)
     }
 
     func testRefreshAllSwitchesActiveCodexConsumerToLiveIdentity() async throws {
@@ -1240,5 +1340,21 @@ private struct MockFailingProvider: ServiceProvider {
         _ = account
         _ = credential
         return false
+    }
+}
+
+private struct MockCredentialsStaleProvider: ServiceProvider {
+    let serviceType: ServiceType = .antigravity
+
+    func fetchUsage(account: Account, credential: String) async throws -> UsageSnapshot {
+        _ = account
+        _ = credential
+        throw ServiceProviderError.credentialsStale
+    }
+
+    func validateCredentials(account: Account, credential: String) async throws -> Bool {
+        _ = account
+        _ = credential
+        return true
     }
 }

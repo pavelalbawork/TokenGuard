@@ -261,18 +261,11 @@ final class UsagePollingEngine {
                providerError == .credentialsStale {
                 // Credentials belong to a different account (e.g. Antigravity
                 // account switch detected but OAuth token hasn't refreshed).
-                // Set an empty snapshot so the card stops showing "Loading..."
-                // and don't set an error message. Not marked stale so it
-                // shows LIVE, not STALE.
-                if state.snapshot == nil {
-                    state.snapshot = UsageSnapshot(
-                        accountId: accountID,
-                        timestamp: Date(),
-                        windows: [],
-                        breakdown: []
-                    )
+                if let snapshot = state.snapshot {
+                    state.snapshot = snapshot.markingStale(true)
                 }
-                state.errorMessage = nil
+                state.errorMessage = providerError.errorDescription
+                state.connectionStatus = nil
                 break
             }
             if let snapshot = state.snapshot {
@@ -339,26 +332,7 @@ final class UsagePollingEngine {
                 continue
             }
 
-            var matchedAccount = matchingConsumerAccount(for: identity, in: accounts)
-
-            // Antigravity-specific: when the provider detected an account switch
-            // (email=nil, profileUrl-only identity) and no account matched by
-            // stored profileUrl, try to infer the active account.
-            if matchedAccount == nil,
-               serviceType == .antigravity,
-               identity.email == nil,
-               let liveProfileUrl = identity.profileUrl {
-                let currentActiveID = accountStore.activeConsumerAccountID(for: .antigravity)
-                // For 2-account case: the active one must be the OTHER account.
-                if accounts.count == 2,
-                   let otherAccount = accounts.first(where: { $0.id != currentActiveID }) {
-                    matchedAccount = otherAccount
-                    // Store the profileUrl on this account for future matching.
-                    var updated = otherAccount
-                    updated.configuration[Account.ConfigurationKey.antigravityProfileUrl] = liveProfileUrl
-                    try? accountStore.update(updated)
-                }
-            }
+            let matchedAccount = matchingConsumerAccount(for: identity, in: accounts)
 
             guard let matchedAccount else {
                 // Live identity is present but no registered TokenGuard account
